@@ -1,0 +1,56 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Sport {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String
+  image       String
+  courts      Court[]
+  bookings    Booking[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Court {
+  id           Int       @id @default(autoincrement())
+  name         String
+  pricePerHour Int
+  location     String
+  image        String?
+  sportId      Int
+  sport        Sport     @relation(fields: [sportId], references: [id], onDelete: Cascade)
+  bookings     Booking[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([sportId])
+}
+
+model Booking {
+  id           Int      @id @default(autoincrement())
+  date         DateTime @db.Date
+  timeSlot     String
+  courtId      Int
+  sportId      Int
+  customerName String
+  customerEmail String
+  totalPrice   Int
+  court        Court    @relation(fields: [courtId], references: [id], onDelete: Cascade)
+  sport        Sport    @relation(fields: [sportId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([courtId, date])
+  @@index([sportId])
+  @@unique([courtId, date, timeSlot], name: "unique_booking")
+}
