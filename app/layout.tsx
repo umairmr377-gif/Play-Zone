@@ -12,6 +12,15 @@ export const metadata: Metadata = {
   title: "Play Zone - Book Sports Courts Online",
   description: "Book sports courts online on Play Zone - Football, Cricket, Paddle, and more",
   keywords: ["sports", "booking", "courts", "football", "cricket", "play zone"],
+  icons: {
+    icon: [
+      { url: "/branding/playzone/favicon.svg", type: "image/svg+xml" },
+      { url: "/branding/playzone/favicon.ico", sizes: "any" },
+    ],
+    apple: [
+      { url: "/branding/playzone/app-icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+  },
 };
 
 // Initialize monitoring in production

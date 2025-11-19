@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Menu, X, Trophy } from "lucide-react";
+import Image from "next/image";
+import { Menu, X } from "lucide-react";
 import AuthButton from "./AuthButton";
 
 export default function Navbar() {
@@ -18,7 +19,14 @@ export default function Navbar() {
               href="/" 
               className="flex items-center gap-2 text-2xl font-display font-bold text-primary hover:text-primary-light transition-colors duration-300"
             >
-              <Trophy className="w-7 h-7 text-primary" />
+              <Image
+                src="/branding/playzone/logo-icon-dark.svg"
+                alt="Play Zone Logo"
+                width={40}
+                height={40}
+                priority
+                className="h-10 w-auto"
+              />
               <span>Play Zone</span>
             </Link>
           </div>

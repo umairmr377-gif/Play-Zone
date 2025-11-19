@@ -1,0 +1,32 @@
+{
+  "name": "Play Zone - Your Sport, Your Time",
+  "short_name": "Play Zone",
+  "description": "Book sports courts online on Play Zone - Football, Cricket, Paddle, and more",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0D0D0D",
+  "theme_color": "#3A7AFE",
+  "icons": [
+    {
+      "src": "/branding/playzone/app-icon-64.png",
+      "sizes": "64x64",
+      "type": "image/png"
+    },
+    {
+      "src": "/branding/playzone/app-icon-128.png",
+      "sizes": "128x128",
+      "type": "image/png"
+    },
+    {
+      "src": "/branding/playzone/app-icon-256.png",
+      "sizes": "256x256",
+      "type": "image/png"
+    },
+    {
+      "src": "/branding/playzone/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
+
