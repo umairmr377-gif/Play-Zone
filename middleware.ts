@@ -81,12 +81,21 @@ export async function middleware(request: NextRequest) {
     }
 
     // Check if user is admin
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", session.user.id)
-      .single()
-      .catch(() => ({ data: null }));
+    let profile = null;
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", session.user.id)
+        .single();
+      
+      // Only use profile if no error or error is not a 404/table missing
+      if (!error || (error.status !== 404 && error.code !== "PGRST116" && error.code !== "42P01")) {
+        profile = data;
+      }
+    } catch {
+      // Table doesn't exist - use defaults (user role)
+    }
 
     const userRole = (profile?.role as "user" | "admin") || "user";
 

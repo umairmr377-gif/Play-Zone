@@ -1,69 +1,105 @@
 import { getPublicClient } from "./supabaseClient";
-import { getServerClient } from "./supabaseServer";
+import { getServerClient, createServerComponentClient } from "./supabaseServer";
 import { Sport, Court } from "@/data/types";
 import { sports as mockSports, getSportById as getMockSportById } from "@/data/sports";
 
 /**
- * Get all sports (client-safe, uses public client)
- * Falls back to mock data if Supabase is not configured
+ * Get all sports (server-side, uses server component client)
+ * Falls back to mock data if Supabase is not configured or tables don't exist
  */
 export async function getAllSports(): Promise<Sport[]> {
-  const client = getPublicClient();
+  // Try to use server component client first (for server-side rendering)
+  let client;
+  try {
+    client = await createServerComponentClient();
+  } catch {
+    // Fallback to public client if server client fails
+    client = getPublicClient();
+  }
 
   // Fallback to mock data if Supabase is not configured
   if (!client) {
+    console.warn("Supabase not configured, using mock data");
     return mockSports;
   }
 
-  const { data: sportsData, error: sportsError } = await (client as any)
-    .from("sports")
-    .select("*")
-    .order("id");
+  try {
+    const { data: sportsData, error: sportsError } = await (client as any)
+      .from("sports")
+      .select("*")
+      .order("id");
 
-  if (sportsError) {
-    throw new Error(`Error fetching sports: ${sportsError.message}`);
+    // If table doesn't exist or other error, fall back to mock data
+    if (sportsError) {
+      const errorMessage = sportsError.message || "";
+      if (
+        errorMessage.includes("schema cache") ||
+        errorMessage.includes("relation") ||
+        errorMessage.includes("does not exist") ||
+        errorMessage.includes("PGRST")
+      ) {
+        console.warn("Sports table not found in database, using mock data. Run supabase/schema.sql to create tables.");
+        return mockSports;
+      }
+      throw new Error(`Error fetching sports: ${sportsError.message}`);
+    }
+
+    if (!sportsData || sportsData.length === 0) {
+      // Empty table - return empty array (or mock data for development)
+      return [];
+    }
+
+    // Fetch courts for each sport
+    const { data: courtsData, error: courtsError } = await (client as any)
+      .from("courts")
+      .select("*")
+      .order("id");
+
+    if (courtsError) {
+      const errorMessage = courtsError.message || "";
+      if (
+        errorMessage.includes("schema cache") ||
+        errorMessage.includes("relation") ||
+        errorMessage.includes("does not exist")
+      ) {
+        console.warn("Courts table not found, continuing without courts data");
+        // Continue with empty courts array
+      } else {
+        throw new Error(`Error fetching courts: ${courtsError.message}`);
+      }
+    }
+
+    // Map database rows to Sport interface
+    const sports: Sport[] = sportsData.map((sport: any) => {
+      const courts: Court[] = (courtsData || [])
+        .filter((court: any) => court.sport_id === sport.id)
+        .map((court: any) => {
+          const extraInfo = court.extra_info as any;
+          return {
+            id: court.id.toString(),
+            name: court.name,
+            pricePerHour: court.price_per_hour,
+            location: court.location || "",
+            image: extraInfo?.image || undefined,
+            availableTimeSlots: extraInfo?.availableTimeSlots || [],
+          };
+        });
+
+      return {
+        id: sport.id.toString(),
+        name: sport.name,
+        description: sport.description || "",
+        image: sport.image || "",
+        courts,
+      };
+    });
+
+    return sports;
+  } catch (error: any) {
+    // If any other error occurs, fall back to mock data
+    console.warn("Error fetching from Supabase, using mock data:", error.message);
+    return mockSports;
   }
-
-  if (!sportsData || sportsData.length === 0) {
-    return [];
-  }
-
-  // Fetch courts for each sport
-  const { data: courtsData, error: courtsError } = await (client as any)
-    .from("courts")
-    .select("*")
-    .order("id");
-
-  if (courtsError) {
-    throw new Error(`Error fetching courts: ${courtsError.message}`);
-  }
-
-  // Map database rows to Sport interface
-  const sports: Sport[] = sportsData.map((sport: any) => {
-    const courts: Court[] = (courtsData || [])
-      .filter((court: any) => court.sport_id === sport.id)
-      .map((court: any) => {
-        const extraInfo = court.extra_info as any;
-        return {
-          id: court.id.toString(),
-          name: court.name,
-          pricePerHour: court.price_per_hour,
-          location: court.location || "",
-          image: extraInfo?.image || undefined,
-          availableTimeSlots: extraInfo?.availableTimeSlots || [],
-        };
-      });
-
-    return {
-      id: sport.id.toString(),
-      name: sport.name,
-      description: sport.description || "",
-      image: sport.image || "",
-      courts,
-    };
-  });
-
-  return sports;
 }
 
 /**

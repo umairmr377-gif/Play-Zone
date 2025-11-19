@@ -4,6 +4,7 @@ import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import Container from "@/components/ui/Container";
+import SupabaseSetupWarning from "@/components/SupabaseSetupWarning";
 import { initMonitoring } from "@/lib/monitoring";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -41,6 +42,7 @@ export default function RootLayout({
           <Container>{children}</Container>
         </main>
         <Footer />
+        <SupabaseSetupWarning />
       </body>
     </html>
   );

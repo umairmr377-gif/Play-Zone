@@ -22,6 +22,8 @@ export default function LoginPage() {
 
   useEffect(() => {
     // Check if already logged in
+    if (!supabase) return;
+    
     const checkSession = async () => {
       const {
         data: { session },
@@ -38,6 +40,12 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
+    if (!supabase) {
+      setError("Supabase is not configured. Please create a .env.local file with your Supabase credentials. See QUICK_FIX_SUPABASE.md for instructions.");
+      setLoading(false);
+      return;
+    }
+
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -51,7 +59,22 @@ export default function LoginPage() {
         router.refresh();
       }
     } catch (error: any) {
-      setError(error.message || "Failed to sign in");
+      // Parse Supabase error messages for better UX
+      const errorMessage = error.message || error.error_description || "Failed to sign in";
+      
+      if (errorMessage.includes("Invalid login credentials") || errorMessage.includes("invalid_credentials")) {
+        setError("Invalid email or password. Please check your credentials and try again.");
+      } else if (errorMessage.includes("Email not confirmed") || errorMessage.includes("email_not_confirmed")) {
+        setError("Please check your email and click the confirmation link before signing in. If you didn't receive it, try signing up again.");
+      } else if (errorMessage.includes("User not found") || errorMessage.includes("user_not_found")) {
+        setError("No account found with this email. Please sign up first.");
+      } else if (errorMessage.includes("Failed to fetch") || errorMessage.includes("ERR_NAME_NOT_RESOLVED")) {
+        setError("Cannot connect to Supabase. Please check your internet connection and try again.");
+      } else if (errorMessage.includes("environment variables") || errorMessage.includes("not configured")) {
+        setError("Supabase is not configured. Please set up your .env.local file with Supabase credentials.");
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -61,6 +84,12 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
+
+    if (!supabase) {
+      setError("Supabase is not configured. Please create a .env.local file with your Supabase credentials.");
+      setLoading(false);
+      return;
+    }
 
     try {
       const { error } = await supabase.auth.signInWithOtp({

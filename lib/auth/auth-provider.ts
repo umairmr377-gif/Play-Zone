@@ -130,12 +130,21 @@ function getSupabaseAuthProvider(): AuthProvider {
       }
       
       // Fetch profile for role
-      const { data: profile } = await (supabase as any)
-        .from("profiles")
-        .select("role, full_name")
-        .eq("id", authUser.id)
-        .single()
-        .catch(() => ({ data: null }));
+      let profile = null;
+      try {
+        const { data, error } = await (supabase as any)
+          .from("profiles")
+          .select("role, full_name")
+          .eq("id", authUser.id)
+          .single();
+        
+        // Only use profile if no error or error is not a 404/table missing
+        if (!error || (error.status !== 404 && error.code !== "PGRST116" && error.code !== "42P01")) {
+          profile = data;
+        }
+      } catch {
+        // Table doesn't exist - use defaults
+      }
       
       return {
         id: authUser.id,
@@ -160,12 +169,21 @@ function getSupabaseAuthProvider(): AuthProvider {
       }
       
       // Fetch profile for role
-      const { data: profile } = await (supabase as any)
-        .from("profiles")
-        .select("role, full_name")
-        .eq("id", session.user.id)
-        .single()
-        .catch(() => ({ data: null }));
+      let profile = null;
+      try {
+        const { data, error } = await (supabase as any)
+          .from("profiles")
+          .select("role, full_name")
+          .eq("id", session.user.id)
+          .single();
+        
+        // Only use profile if no error or error is not a 404/table missing
+        if (!error || (error.status !== 404 && error.code !== "PGRST116" && error.code !== "42P01")) {
+          profile = data;
+        }
+      } catch {
+        // Table doesn't exist - use defaults
+      }
       
       return {
         user: {

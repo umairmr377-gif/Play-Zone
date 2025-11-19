@@ -70,7 +70,7 @@ export async function getBookings(filters?: {
 
 /**
  * Get booked time slots for a specific court and date
- * Falls back to empty array if Supabase is not configured
+ * Falls back to empty array if Supabase is not configured or table doesn't exist
  */
 export async function getBookedSlots(
   courtId: string,
@@ -83,18 +83,37 @@ export async function getBookedSlots(
     return [];
   }
 
-  const { data, error } = await (client as any)
-    .from("bookings")
-    .select("time_slot")
-    .eq("court_id", parseInt(courtId))
-    .eq("date", date)
-    .eq("status", "confirmed"); // Only count confirmed bookings
+  try {
+    const { data, error } = await (client as any)
+      .from("bookings")
+      .select("time_slot")
+      .eq("court_id", parseInt(courtId))
+      .eq("date", date)
+      .eq("status", "confirmed"); // Only count confirmed bookings
 
-  if (error) {
-    throw new Error(`Error fetching booked slots: ${error.message}`);
+    // Check if error is due to missing table
+    if (error) {
+      const errorMessage = error.message || "";
+      if (
+        errorMessage.includes("schema cache") ||
+        errorMessage.includes("relation") ||
+        errorMessage.includes("does not exist") ||
+        error.code === "42P01" ||
+        error.code === "PGRST116"
+      ) {
+        // Table doesn't exist yet - return empty array (no bookings)
+        console.warn("Bookings table not found, returning empty slots. Run supabase/schema.sql to create tables.");
+        return [];
+      }
+      throw new Error(`Error fetching booked slots: ${error.message}`);
+    }
+
+    return (data || []).map((b: any) => b.time_slot);
+  } catch (error: any) {
+    // If any other error occurs, return empty array (no bookings)
+    console.warn("Error fetching booked slots, returning empty:", error.message);
+    return [];
   }
-
-  return (data || []).map((b: any) => b.time_slot);
 }
 
 /**

@@ -45,21 +45,19 @@ export async function getServerAuthSession(): Promise<AuthSession> {
         .eq("id", authUser.id)
         .single();
 
-      if (profileError || !profile || typeof profile !== 'object' || !('role' in profile)) {
-        // If profile doesn't exist, create one with default 'user' role
-        const { error: createError } = await (supabase as any)
-          .from("profiles")
-          .insert({
-            id: authUser.id,
-            role: "user",
-            full_name: authUser.email?.split("@")[0] || null,
-          });
+      // Check if error is due to missing table
+      const isTableMissing = profileError && (
+        profileError.status === 404 ||
+        profileError.code === "PGRST116" ||
+        profileError.code === "42P01" ||
+        profileError.message?.includes("schema cache") ||
+        profileError.message?.includes("relation") ||
+        profileError.message?.includes("does not exist")
+      );
 
-        if (createError) {
-          console.error("Error creating profile:", createError);
-          return { user: null };
-        }
-
+      if (isTableMissing) {
+        // Table doesn't exist - return user with default role
+        // User needs to run database schema
         return {
           user: {
             id: authUser.id,
@@ -67,6 +65,47 @@ export async function getServerAuthSession(): Promise<AuthSession> {
             role: "user",
           },
         };
+      }
+
+      if (profileError || !profile || typeof profile !== 'object' || !('role' in profile)) {
+        // Profile doesn't exist but table does - try to create one
+        try {
+          const { error: createError } = await (supabase as any)
+            .from("profiles")
+            .insert({
+              id: authUser.id,
+              role: "user",
+              full_name: authUser.email?.split("@")[0] || null,
+            });
+
+          if (createError) {
+            // If creation fails, return user with default role
+            return {
+              user: {
+                id: authUser.id,
+                email: authUser.email,
+                role: "user",
+              },
+            };
+          }
+
+          return {
+            user: {
+              id: authUser.id,
+              email: authUser.email,
+              role: "user",
+            },
+          };
+        } catch (error) {
+          // If insert fails (e.g., table doesn't exist), return user with default role
+          return {
+            user: {
+              id: authUser.id,
+              email: authUser.email,
+              role: "user",
+            },
+          };
+        }
       }
 
       const profileData = profile as { role: string; full_name?: string | null };

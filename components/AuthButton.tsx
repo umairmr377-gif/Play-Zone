@@ -1,11 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import Button from "./Button";
 import { User, LogOut, Settings, Calendar } from "lucide-react";
+import {
+  shouldSkipProfilesQuery,
+  setProfilesTableExists,
+} from "@/lib/utils/profiles-cache";
 
 interface UserProfile {
   id: string;
@@ -20,8 +24,14 @@ export default function AuthButton() {
   const [loading, setLoading] = useState(true);
   const [showMenu, setShowMenu] = useState(false);
   const supabase = createClient();
+  const isCheckingRef = useRef(false);
 
   useEffect(() => {
+    if (!supabase) {
+      setLoading(false);
+      return;
+    }
+
     checkUser();
     
     // Listen for auth changes
@@ -35,6 +45,19 @@ export default function AuthButton() {
   }, [supabase]);
 
   const checkUser = async () => {
+    if (!supabase) {
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
+    // Prevent parallel queries
+    if (isCheckingRef.current) {
+      return;
+    }
+
+    isCheckingRef.current = true;
+
     try {
       const {
         data: { user: authUser },
@@ -42,12 +65,48 @@ export default function AuthButton() {
 
       if (authUser) {
         // Fetch profile with role
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role, full_name")
-          .eq("id", authUser.id)
-          .single()
-          .catch(() => ({ data: null }));
+        let profile = null;
+        
+        // Skip query if we know table doesn't exist (prevents repeated 404s)
+        const skipQuery = shouldSkipProfilesQuery();
+        
+        if (!skipQuery) {
+          try {
+            const { data, error } = await supabase
+              .from("profiles")
+              .select("role, full_name")
+              .eq("id", authUser.id)
+              .single();
+            
+            if (!error && data) {
+              profile = data;
+              setProfilesTableExists(true); // Cache that table exists
+            } else if (error) {
+              // Check if it's a table not found error (404) or schema cache error
+              const errorMessage = error.message || "";
+              const isTableMissing = 
+                error.status === 404 ||
+                error.code === "PGRST116" ||
+                error.code === "42P01" ||
+                errorMessage.includes("schema cache") ||
+                errorMessage.includes("relation") ||
+                errorMessage.includes("does not exist");
+              
+              if (isTableMissing) {
+                // Cache that table doesn't exist to prevent future requests
+                setProfilesTableExists(false);
+              } else {
+                // Other error - log it but don't spam console
+                console.warn("Profile fetch error (non-critical):", error.message);
+                // Assume table exists for other errors
+                setProfilesTableExists(true);
+              }
+            }
+          } catch (error: any) {
+            // Profile table might not exist yet - cache it
+            setProfilesTableExists(false);
+          }
+        }
 
         setUser({
           id: authUser.id,
@@ -63,10 +122,13 @@ export default function AuthButton() {
       setUser(null);
     } finally {
       setLoading(false);
+      isCheckingRef.current = false;
     }
   };
 
   const handleLogout = async () => {
+    if (!supabase) return;
+    
     await supabase.auth.signOut();
     setUser(null);
     setShowMenu(false);

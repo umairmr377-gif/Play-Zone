@@ -23,6 +23,12 @@ export default function SignupPage() {
     setError("");
     setLoading(true);
 
+    if (!supabase) {
+      setError("Supabase is not configured. Please create a .env.local file with your Supabase credentials. See QUICK_FIX_SUPABASE.md for instructions.");
+      setLoading(false);
+      return;
+    }
+
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -44,7 +50,21 @@ export default function SignupPage() {
         }, 2000);
       }
     } catch (error: any) {
-      setError(error.message || "Failed to sign up");
+      const errorMessage = error.message || error.error_description || "Failed to sign up";
+      
+      if (errorMessage.includes("User already registered") || errorMessage.includes("already_registered")) {
+        setError("An account with this email already exists. Please sign in instead.");
+      } else if (errorMessage.includes("Password should be at least") || errorMessage.includes("password_too_short")) {
+        setError("Password must be at least 6 characters long.");
+      } else if (errorMessage.includes("Invalid email") || errorMessage.includes("invalid_email")) {
+        setError("Please enter a valid email address.");
+      } else if (errorMessage.includes("Failed to fetch") || errorMessage.includes("ERR_NAME_NOT_RESOLVED")) {
+        setError("Cannot connect to Supabase. Please check your internet connection and try again.");
+      } else if (errorMessage.includes("environment variables") || errorMessage.includes("not configured")) {
+        setError("Supabase is not configured. Please set up your .env.local file with Supabase credentials.");
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
