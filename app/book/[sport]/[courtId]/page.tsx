@@ -75,12 +75,13 @@ export default function BookingPage() {
   }, [selectedDate, courtId]);
 
   const fetchBookedSlots = async () => {
-    if (!courtId || !selectedDate) return;
+    if ((!courtId && !court?.name) || !selectedDate) return;
     setIsLoadingSlots(true);
     setError(null);
     try {
+      const courtName = court?.name || courtId;
       const response = await fetch(
-        `/api/bookings?courtId=${courtId}&date=${selectedDate}`
+        `/api/bookings?courtName=${encodeURIComponent(courtName)}&date=${selectedDate}`
       );
       if (response.ok) {
         const data = await response.json();
@@ -125,19 +126,21 @@ export default function BookingPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          sportId,
-          courtId,
+          sportName: sport?.name || sportId,
+          courtName: court?.name || courtId,
           date: selectedDate,
           timeSlots: selectedSlots,
+          pricePerHour: court?.pricePerHour || 0,
+          totalPrice: calculateTotalPrice(selectedSlots, court?.pricePerHour || 0),
           customerName,
           customerEmail,
-          totalPrice: calculateTotalPrice(selectedSlots, court?.pricePerHour || 0),
         }),
       });
 
       if (response.ok) {
         const booking = await response.json();
-        router.push(`/confirmation?id=${booking.id}`);
+        // Redirect to My Bookings page after successful booking
+        router.push("/bookings/my");
       } else {
         const errorData = await response.json();
         setError(errorData.message || "Booking failed. Please try again.");

@@ -36,8 +36,9 @@ export default function CourtBookingSection({
 
   const fetchBookedSlots = async () => {
     try {
+      const courtName = court.name || court.id;
       const response = await fetch(
-        `/api/bookings?courtId=${court.id}&date=${bookingDate}`
+        `/api/bookings?courtName=${encodeURIComponent(courtName)}&date=${bookingDate}`
       );
       if (response.ok) {
         const data = await response.json();
@@ -79,19 +80,19 @@ export default function CourtBookingSection({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          sportId: sport.id,
-          courtId: court.id,
-          timeSlot: selectedSlot,
+          sportName: sport.name || sport.id,
+          courtName: court.name || court.id,
+          timeSlots: [selectedSlot],
           date: bookingDate,
-          price: court.pricePerHour,
-          userName: "", // Will be added in future phases
+          pricePerHour: court.pricePerHour,
+          totalPrice: court.pricePerHour, // Single slot = price per hour
         }),
       });
 
       if (response.ok) {
         const booking = await response.json();
-        // Redirect to confirmation page with booking ID
-        router.push(`/booking/confirmation?bookingId=${booking.id}`);
+        // Redirect to My Bookings page after successful booking
+        router.push("/bookings/my");
       } else {
         const errorData = await response.json();
         setError(errorData.message || "Failed to create booking. Please try again.");

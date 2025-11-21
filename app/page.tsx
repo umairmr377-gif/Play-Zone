@@ -2,6 +2,7 @@ import Link from "next/link";
 import { sports } from "@/data/sports";
 import SportCard from "@/components/SportCard";
 import Button from "@/components/Button";
+import MyBookingsSection from "@/components/MyBookingsSection";
 
 export default function Home() {
   // Get first 3 sports as featured
@@ -32,6 +33,9 @@ export default function Home() {
           </Link>
         </div>
       </div>
+
+      {/* My Bookings Section - Shows user's upcoming bookings */}
+      <MyBookingsSection />
 
       {/* Featured Sports */}
       <div className="mb-12">

@@ -2,18 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { createBooking, getBookedSlots } from "@/lib/bookings";
 import { bookingRateLimiter } from "@/lib/rateLimit";
 import { logger } from "@/lib/logger";
-import { requireUser } from "@/lib/auth";
+import { createRouteHandlerClient } from "@/lib/supabase/server";
 
 // GET /api/bookings
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const courtId = searchParams.get("courtId");
+    const courtName = searchParams.get("courtName");
     const date = searchParams.get("date");
 
     // If filtering by court and date, return booked slots
-    if (courtId && date) {
-      const bookedSlots = await getBookedSlots(courtId, date);
+    if ((courtId || courtName) && date) {
+      const bookedSlots = await getBookedSlots(courtId || courtName || "", date, courtName || undefined);
       return NextResponse.json({ bookedSlots });
     }
 
@@ -55,20 +56,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Require authentication (optional - uncomment if bookings require auth)
-    // const user = await requireUser();
+    // Get authenticated user from Supabase
+    let userId: string | undefined;
+    try {
+      const supabase = await createRouteHandlerClient();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (!authError && user?.id) {
+        userId = user.id;
+        console.log("✅ Found authenticated user_id:", userId);
+      } else {
+        console.log("⚠️ No authenticated user found for booking");
+      }
+    } catch (error) {
+      // Not authenticated - booking will be created without user_id
+      console.warn("Could not get authenticated user for booking:", error);
+    }
 
     const body = await request.json();
     
-    // Support both old format (timeSlot, price, userName) and new format (timeSlots, totalPrice, customerName, customerEmail)
+    // Support both old format and new format
     const {
       sportId,
+      sportName,
       courtId,
+      courtName,
       date,
       timeSlot, // Old format: single slot
       timeSlots, // New format: array of slots
       price, // Old format: price per slot
-      totalPrice, // New format: total price for all slots
+      pricePerHour,
+      totalPrice,
       userName, // Old format
       customerName, // New format
       customerEmail, // New format
@@ -76,113 +94,70 @@ export async function POST(request: NextRequest) {
 
     // Determine which format is being used
     const slots = timeSlots || (timeSlot ? [timeSlot] : []);
-    const name = customerName || userName || "";
-    const total = totalPrice || price || 0;
-    const pricePerSlot = slots.length > 0 ? total / slots.length : 0;
+    const sport = sportName || ""; // Sport name (text)
+    const court = courtName || courtId || ""; // Court name (text)
+    const pricePerHourValue = pricePerHour || price || 0;
+    const total = totalPrice || (slots.length > 0 ? pricePerHourValue * slots.length : 0);
 
     // Validation
-    if (!sportId || !courtId || !date || slots.length === 0 || total <= 0) {
+    if (!sport || !court || !date || slots.length === 0 || total <= 0) {
       return NextResponse.json(
-        { message: "Missing required fields: sportId, courtId, date, timeSlots, and totalPrice are required" },
+        { message: "Missing required fields: sportName, courtName, date, timeSlots, and totalPrice are required" },
         { status: 400 }
       );
     }
 
-    if (customerName && (!customerEmail || customerEmail.trim() === "")) {
-      return NextResponse.json(
-        { message: "Customer email is required when customer name is provided" },
-        { status: 400 }
-      );
-    }
-
-    // Create a booking for each time slot
-    const bookings = [];
-    const errors = [];
-
-    for (const slot of slots) {
-      try {
-        const booking = await createBooking({
-          sportId,
-          courtId,
-          timeSlot: slot,
-          date,
-          price: pricePerSlot,
-          userName: name,
-        });
-        bookings.push(booking);
-      } catch (error: any) {
-        // If one slot fails, collect the error but continue with others
-        errors.push(`${slot}: ${error.message}`);
-      }
-    }
-
-    // If all bookings failed, return error
-    if (bookings.length === 0) {
-      return NextResponse.json(
-        { 
-          message: errors.length > 0 
-            ? `Failed to create bookings: ${errors.join("; ")}` 
-            : "Failed to create bookings" 
-        },
-        { status: 400 }
-      );
-    }
-
-    // If some bookings failed, log warnings but return success for the ones that succeeded
-    if (errors.length > 0) {
-      logger.warn("Some bookings failed", {
-        sportId,
-        courtId,
+    // Create a single booking with all time slots
+    try {
+      const booking = await createBooking({
+        sportName: sport,
+        courtName: court,
         date,
-        errors,
-        successful: bookings.length,
+        timeSlots: slots,
+        pricePerHour: pricePerHourValue,
+        totalPrice: total,
+        userId: userId || undefined, // Ensure it's undefined if null
       });
+
+      // Log successful booking
+      logger.bookingCreated(booking.id, customerName || userName || "anonymous", {
+        sportName: sport,
+        courtName: court,
+        date,
+        timeSlots: slots,
+        totalPrice: total,
+      });
+
+      return NextResponse.json(booking, {
+        status: 201,
+        headers: {
+          "X-RateLimit-Limit": "5",
+          "X-RateLimit-Remaining": String(rateLimit.remaining),
+          "X-RateLimit-Reset": String(rateLimit.resetTime),
+        },
+      });
+    } catch (error: any) {
+      logger.bookingFailed(null, customerName || userName || "anonymous", error, {
+        error: error.message || "Unknown error",
+      });
+
+      // Handle duplicate booking error
+      if (error.message.includes("already booked") || error.message.includes("conflicts")) {
+        return NextResponse.json(
+          { message: error.message },
+          { status: 409 }
+        );
+      }
+
+      return NextResponse.json(
+        { message: error.message || "Internal server error" },
+        { status: 500 }
+      );
     }
-
-    // Return a combined booking object (using the first booking's ID)
-    const firstBooking = bookings[0];
-    const combinedBooking = {
-      id: firstBooking.id,
-      sportId: firstBooking.sportId,
-      courtId: firstBooking.courtId,
-      date: firstBooking.date,
-      timeSlots: bookings.map((b) => b.timeSlots[0]),
-      customerName: name,
-      customerEmail: customerEmail || "",
-      totalPrice: total,
-      createdAt: firstBooking.createdAt,
-      status: firstBooking.status || "confirmed",
-    };
-
-    // Log successful booking
-    logger.bookingCreated(combinedBooking.id, name || "anonymous", {
-      sportId,
-      courtId,
-      date,
-      timeSlots: combinedBooking.timeSlots,
-      totalPrice: total,
-    });
-
-    return NextResponse.json(combinedBooking, {
-      status: 201,
-      headers: {
-        "X-RateLimit-Limit": "5",
-        "X-RateLimit-Remaining": String(rateLimit.remaining),
-        "X-RateLimit-Reset": String(rateLimit.resetTime),
-      },
-    });
   } catch (error: any) {
     logger.bookingFailed(null, "anonymous", error, {
       error: error.message || "Unknown error",
     });
-
-    // Handle duplicate booking error
-    if (error.message.includes("already booked")) {
-      return NextResponse.json(
-        { message: error.message },
-        { status: 409 }
-      );
-    }
 
     return NextResponse.json(
       { message: error.message || "Internal server error" },
