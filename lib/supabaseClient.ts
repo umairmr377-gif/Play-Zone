@@ -1,21 +1,30 @@
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
+import { SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * Get public Supabase client for client-side use
  * Uses public anon key - safe for client-side reads
- * This is a wrapper that ensures the client is created correctly
+ * This is a wrapper that ensures the client is created correctly with SSR support
  * Returns null if environment variables are not configured (for development)
  */
 export function getPublicClient(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // Check if we have valid (non-placeholder) values
-  if (!url || !anonKey || url.includes("placeholder") || anonKey.includes("placeholder")) {
+  // Validate environment variables are present and not placeholders
+  if (!url || !anonKey) {
+    console.warn("⚠️ Supabase env vars missing: NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
     return null;
   }
 
-  return createClient(url, anonKey);
+  if (url.includes("placeholder") || anonKey.includes("placeholder") || 
+      url.includes("your-project") || anonKey.includes("your-anon")) {
+    console.warn("⚠️ Supabase env vars contain placeholder values");
+    return null;
+  }
+
+  // Use createBrowserClient for proper SSR/cookie handling in Next.js
+  return createBrowserClient<Database>(url, anonKey);
 }
 
 /**
