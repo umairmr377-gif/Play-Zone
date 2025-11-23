@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createRouteHandlerClient } from "@/lib/supabase/server";
+import { createRouteHandlerClient, createServiceRoleClient } from "@/lib/supabase/server";
 
 // GET /api/bookings/my - Get current user's bookings
 export async function GET(request: NextRequest) {
@@ -16,87 +16,86 @@ export async function GET(request: NextRequest) {
     }
 
     console.log("🔍 Fetching bookings for user_id:", user.id);
-    console.log("📝 User ID type:", typeof user.id);
-    console.log("📝 User ID value:", user.id);
+    console.log("🔍 User ID type:", typeof user.id);
+    console.log("🔍 User ID value:", JSON.stringify(user.id));
 
-    // Always fetch ALL bookings first to see what we have
-    const { data: allBookings, error: allError } = await (supabase as any)
-      .from("bookings")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (allError) {
-      console.error("❌ Error fetching bookings:", allError);
-      throw new Error(`Error fetching bookings: ${allError.message}`);
-    }
-
-    console.log("📊 Total bookings in table:", allBookings?.length || 0);
-    
-    if (allBookings && allBookings.length > 0) {
-      console.log("📋 ALL bookings in table:", allBookings.map((b: any) => ({
+    // First, let's check what bookings exist (for debugging) - use service role to bypass RLS
+    try {
+      const serviceClient = createServiceRoleClient();
+      const { data: allBookingsDebug } = await (serviceClient as any)
+        .from("bookings")
+        .select("id, user_id, sport, court, booking_date, created_at")
+        .order("created_at", { ascending: false })
+        .limit(10);
+      
+      console.log("📊 Recent bookings in DB:", allBookingsDebug?.map((b: any) => ({
         id: b.id,
         user_id: b.user_id,
         user_id_type: typeof b.user_id,
+        user_id_match: b.user_id === user.id,
+        user_id_string_match: String(b.user_id) === String(user.id),
         sport: b.sport,
-        court: b.court,
-        booking_date: b.booking_date
+        court: b.court
       })));
-      console.log("📝 Current logged-in user ID:", user.id);
-      console.log("📝 Current user ID type:", typeof user.id);
-    } else {
-      console.log("⚠️ No bookings found in table at all!");
-      return NextResponse.json({ bookings: [] });
+    } catch (debugErr) {
+      console.warn("⚠️ Could not fetch debug bookings:", debugErr);
     }
 
-    // Filter bookings by matching user_id
-    // Compare both as strings to handle UUID format differences
-    const currentUserIdStr = String(user.id).toLowerCase().trim();
-    
-    let data = allBookings.filter((booking: any) => {
-      if (!booking.user_id) {
-        console.log("⚠️ Booking has NULL user_id:", booking.id);
-        return false; // Skip NULL user_id bookings
-      }
-      
-      const bookingUserIdStr = String(booking.user_id).toLowerCase().trim();
-      const matches = bookingUserIdStr === currentUserIdStr;
-      
-      if (matches) {
-        console.log("✅ Booking matches user:", {
-          bookingId: booking.id,
-          bookingUserId: booking.user_id,
-          currentUserId: user.id
-        });
-      }
-      
-      return matches;
-    });
+    // Query bookings directly filtered by user_id using Supabase
+    // RLS policy should allow this if user_id matches auth.uid()
+    let { data, error } = await (supabase as any)
+      .from("bookings")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
 
-    console.log("📊 Filtered bookings for user:", data.length);
-    
-    // If no bookings match, show all bookings for debugging
-    // This helps us see if user_id comparison is the issue
-    if (data.length === 0 && allBookings.length > 0) {
-      console.log("⚠️ No bookings match user_id!");
-      console.log("📋 All booking user_ids:", allBookings.map((b: any) => ({
-        id: b.id,
-        user_id: b.user_id,
-        user_id_type: typeof b.user_id
-      })));
-      console.log("📝 Looking for user_id:", user.id);
-      console.log("📝 Looking for user_id type:", typeof user.id);
+    // If query fails or returns empty, try with service role client as fallback
+    // This bypasses RLS but we've already verified the user is authenticated
+    if (error || !data || data.length === 0) {
+      console.log("⚠️ Initial query failed or returned empty, trying with service role client...");
       
-      // Return all bookings for now to see what we have
-      console.log("⚠️ Returning all bookings for debugging...");
-      data = allBookings;
+      try {
+        const serviceClient = createServiceRoleClient();
+        const { data: serviceData, error: serviceError } = await (serviceClient as any)
+          .from("bookings")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+        
+        if (!serviceError && serviceData && serviceData.length > 0) {
+          console.log("✅ Service role query succeeded, found", serviceData.length, "bookings");
+          data = serviceData;
+          error = null;
+        } else if (serviceError) {
+          console.error("❌ Service role query also failed:", serviceError);
+        }
+      } catch (serviceErr: any) {
+        console.warn("⚠️ Could not use service role client:", serviceErr.message);
+        // Continue with original error
+      }
     }
+
+    if (error) {
+      console.error("❌ Error fetching bookings:", error);
+      console.error("❌ Error code:", error.code);
+      console.error("❌ Error message:", error.message);
+      console.error("❌ Error details:", error.details);
+      throw new Error(`Error fetching bookings: ${error.message} (Code: ${error.code})`);
+    }
+
+    console.log("📊 Query result - data length:", data?.length || 0);
+    console.log("📊 Query result - data:", data);
 
     if (!data || data.length === 0) {
-      console.log("⚠️ No bookings found at all!");
+      console.log("⚠️ No bookings found for user:", user.id);
+      console.log("⚠️ This could mean:");
+      console.log("   1. No bookings exist with this user_id");
+      console.log("   2. RLS policy is blocking the query");
+      console.log("   3. user_id in bookings doesn't match current user.id");
       return NextResponse.json({ bookings: [] });
     }
 
-    console.log("✅ Found", data.length, "bookings (may include all for debugging)");
+    console.log("✅ Found", data.length, "bookings for user:", user.id);
 
     // Map booking data - handle all possible column name variations
     const bookings = data.map((booking: any) => {
