@@ -57,13 +57,13 @@ export default function BookingSummary({
         
         <div className="flex justify-between text-sm">
           <span className="text-white/50 font-light">Price per hour:</span>
-          <span className="font-semibold text-white numbers">${court.pricePerHour}</span>
+          <span className="font-semibold text-white numbers">PKR {court.pricePerHour.toLocaleString()}</span>
         </div>
         
         <div className="border-t border-white/10 pt-4 mt-4">
           <div className="flex justify-between text-lg font-display font-black">
             <span className="text-white">Total:</span>
-            <span className="text-white numbers">${totalPrice}</span>
+            <span className="text-white numbers">PKR {totalPrice.toLocaleString()}</span>
           </div>
         </div>
       </div>

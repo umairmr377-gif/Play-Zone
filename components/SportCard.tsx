@@ -82,7 +82,7 @@ export default function SportCard({ sport, className = "", showTag = null }: Spo
         <p className="text-white/50 mb-4 line-clamp-2 text-sm font-light leading-relaxed">{sport.description}</p>
         <div className="flex items-center justify-between pt-2">
           <div className="text-sm font-medium text-white/70">
-            From <span className="text-white font-semibold numbers">${minPrice}</span>/hour
+            From <span className="text-white font-semibold numbers">PKR {minPrice.toLocaleString()}</span>/hour
           </div>
           <Link href={`/sports/${sport.id}`}>
             <Button size="sm" variant="outline">

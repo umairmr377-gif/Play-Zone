@@ -166,7 +166,10 @@ export default function AdminAuditPage() {
                 logs.map((log) => (
                   <tr key={log.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(log.created_at).toLocaleString()}
+                      {(() => {
+                        const { formatDateTimePKT } = require("@/lib/utils");
+                        return formatDateTimePKT(log.created_at);
+                      })()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="text-sm font-mono text-gray-900">

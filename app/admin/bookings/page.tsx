@@ -208,15 +208,25 @@ export default function AdminBookingsPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900">{booking.date}</div>
-                      <div className="text-sm text-gray-500">{booking.timeSlots.join(", ")}</div>
+                      <div className="text-sm text-gray-900">
+                        {(() => {
+                          const { formatDate } = require("@/lib/utils");
+                          return formatDate(booking.date);
+                        })()}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {booking.timeSlots.map((slot) => {
+                          const { formatTime12Hour } = require("@/lib/utils");
+                          return formatTime12Hour(slot);
+                        }).join(", ")}
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm text-gray-900">{booking.customerName || "N/A"}</div>
                       <div className="text-sm text-gray-500">{booking.customerEmail || "N/A"}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-primary-600">
-                      ${booking.totalPrice}
+                      PKR {booking.totalPrice.toLocaleString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <Badge variant="default">{(booking as any).status || "confirmed"}</Badge>

@@ -138,7 +138,12 @@ export default function BookingDetailPage() {
               )}
               <div className="flex justify-between">
                 <span className="text-gray-600">Date:</span>
-                <span className="font-medium">{booking.date}</span>
+                <span className="font-medium">
+                  {(() => {
+                    const { formatDate } = require("@/lib/utils");
+                    return formatDate(booking.date);
+                  })()}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Time Slots:</span>
@@ -152,12 +157,15 @@ export default function BookingDetailPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Total Price:</span>
-                <span className="text-lg font-bold text-primary-600">${booking.totalPrice}</span>
+                <span className="text-lg font-bold text-primary-600">PKR {booking.totalPrice.toLocaleString()}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Created At:</span>
                 <span className="font-medium">
-                  {new Date(booking.createdAt).toLocaleString()}
+                  {(() => {
+                    const { formatDateTimePKT } = require("@/lib/utils");
+                    return formatDateTimePKT(booking.createdAt);
+                  })()}
                 </span>
               </div>
             </div>

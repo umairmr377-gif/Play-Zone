@@ -27,7 +27,36 @@ export default function CourtBookingSection({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  const bookingDate = date || new Date().toISOString().split("T")[0];
+  // Use state for bookingDate to handle midnight crossing
+  const [bookingDate, setBookingDate] = useState<string>(() => {
+    if (date) return date;
+    const { getTodayDate } = require("@/lib/utils");
+    return getTodayDate();
+  });
+
+  // Update bookingDate when crossing midnight (if no explicit date prop)
+  useEffect(() => {
+    if (date) {
+      // If date prop is provided, use it and don't auto-update
+      setBookingDate(date);
+      return;
+    }
+
+    // Check every minute if we've crossed midnight
+    const interval = setInterval(() => {
+      const { getTodayDate } = require("@/lib/utils");
+      const today = getTodayDate();
+      // Use functional update to avoid dependency on bookingDate
+      setBookingDate((currentDate) => {
+        if (currentDate !== today) {
+          return today;
+        }
+        return currentDate;
+      });
+    }, 60000); // Check every minute
+
+    return () => clearInterval(interval);
+  }, [date]); // Removed bookingDate from dependencies to prevent memory leaks
 
   // Fetch booked slots on mount and when date changes
   useEffect(() => {

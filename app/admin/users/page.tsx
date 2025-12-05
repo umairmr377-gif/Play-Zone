@@ -156,7 +156,12 @@ export default function AdminUsersPage() {
                       </Badge>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">
-                      {new Date(user.created_at).toLocaleDateString()}
+                      {(() => {
+                        const { toPKT } = require("@/lib/utils");
+                        return toPKT(user.created_at).toLocaleDateString("en-US", {
+                          timeZone: "Asia/Karachi",
+                        });
+                      })()}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex gap-2">

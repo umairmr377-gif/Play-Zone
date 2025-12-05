@@ -3,49 +3,160 @@
  */
 
 /**
- * Format currency amount
+ * Convert date to Pakistan Standard Time (PKT - UTC+5)
+ * 
+ * Note: JavaScript Date objects are always stored in UTC internally.
+ * This function returns a Date object that, when formatted with timeZone: 'Asia/Karachi',
+ * will display the correct PKT time. The Date object itself remains in UTC.
+ * 
+ * For proper PKT formatting, use formatDatePKT(), formatTimePKT(), etc. which
+ * use the timeZone parameter in toLocaleString().
  */
-export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(amount);
+export function toPKT(date: string | Date): Date {
+  const dateObj = typeof date === "string" ? new Date(date) : date;
+  // getTime() already returns UTC milliseconds since epoch
+  // We don't need to adjust for local timezone - the Date object is already in UTC
+  // Just return it as-is; formatting functions will handle PKT conversion
+  return dateObj;
 }
 
 /**
- * Format date to readable string
+ * Format currency amount in PKR
+ * Returns format: "PKR 1,200"
+ */
+export function formatPKR(amount: number): string {
+  // Format number with thousand separators
+  const formattedNumber = new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+  return `PKR ${formattedNumber}`;
+}
+
+/**
+ * Format currency amount in PKR (alias for formatPKR)
+ * @deprecated Use formatPKR instead
+ */
+export function formatCurrency(amount: number): string {
+  return formatPKR(amount);
+}
+
+/**
+ * Format date to readable string in PKT
  */
 export function formatDate(date: string | Date): string {
-  const dateObj = typeof date === "string" ? new Date(date) : date;
-  return dateObj.toLocaleDateString("en-US", {
+  const pktDate = toPKT(date);
+  return pktDate.toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
     month: "long",
     day: "numeric",
+    timeZone: "Asia/Karachi",
   });
 }
 
 /**
- * Format date to short string (MM/DD/YYYY)
+ * Format date to short string (MM/DD/YYYY) in PKT
  */
 export function formatDateShort(date: string | Date): string {
-  const dateObj = typeof date === "string" ? new Date(date) : date;
-  return dateObj.toLocaleDateString("en-US", {
+  const pktDate = toPKT(date);
+  return pktDate.toLocaleDateString("en-US", {
     month: "2-digit",
     day: "2-digit",
     year: "numeric",
+    timeZone: "Asia/Karachi",
   });
 }
 
 /**
- * Format time slot to 12-hour format
+ * Format time slot to 12-hour format with PKT
  */
 export function formatTime12Hour(time24: string): string {
   const [hours, minutes] = time24.split(":");
   const hour = parseInt(hours, 10);
   const ampm = hour >= 12 ? "PM" : "AM";
   const hour12 = hour % 12 || 12;
-  return `${hour12}:${minutes} ${ampm}`;
+  return `${hour12}:${minutes} ${ampm} PKT`;
+}
+
+/**
+ * Format time with PKT timezone
+ */
+export function formatTimePKT(date: string | Date): string {
+  const pktDate = toPKT(date);
+  return pktDate.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Karachi",
+  }) + " PKT";
+}
+
+/**
+ * Format datetime with PKT timezone
+ */
+export function formatDateTimePKT(date: string | Date): string {
+  const pktDate = toPKT(date);
+  return pktDate.toLocaleString("en-US", {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Karachi",
+  }) + " PKT";
+}
+
+/**
+ * Format date relatively (Today, Tomorrow) in PKT timezone
+ * Falls back to formatted date string if not today or tomorrow
+ */
+export function formatDateRelativePKT(dateString: string): string {
+  const date = toPKT(dateString);
+  
+  // Get today's date in PKT (YYYY-MM-DD format)
+  const todayPKT = getTodayDate();
+  
+  // Get tomorrow's date in PKT by parsing today's PKT date string and adding 1 day
+  // This ensures date arithmetic happens on the PKT date, not local timezone
+  const [year, month, day] = todayPKT.split("-").map(Number);
+  // Create a date object from the PKT date components
+  // Use UTC to avoid local timezone interference, then format with PKT timezone
+  const todayUTC = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+  // Add 1 day (24 hours)
+  const tomorrowUTC = new Date(todayUTC.getTime() + 24 * 60 * 60 * 1000);
+  // Format in PKT timezone to get tomorrow's date string
+  const tomorrowPKT = tomorrowUTC.toLocaleDateString("en-CA", {
+    timeZone: "Asia/Karachi",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  
+  // Get the input date in PKT (YYYY-MM-DD format)
+  const inputDatePKT = date.toLocaleDateString("en-CA", {
+    timeZone: "Asia/Karachi",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  
+  // Compare date strings in PKT
+  if (inputDatePKT === todayPKT) {
+    return "Today";
+  } else if (inputDatePKT === tomorrowPKT) {
+    return "Tomorrow";
+  }
+  
+  // Fall back to formatted date
+  return date.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "Asia/Karachi",
+  });
 }
 
 /**
@@ -60,21 +171,29 @@ export function generateTimeSlots(startHour: number = 6, endHour: number = 23): 
 }
 
 /**
- * Check if a date is in the past
+ * Check if a date is in the past (using PKT timezone)
  */
 export function isPastDate(date: string): boolean {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const checkDate = new Date(date);
-  checkDate.setHours(0, 0, 0, 0);
-  return checkDate < today;
+  // Get today's date in PKT (YYYY-MM-DD format)
+  const todayPKT = getTodayDate();
+  // Compare date strings directly (YYYY-MM-DD format)
+  return date < todayPKT;
 }
 
 /**
- * Get today's date in YYYY-MM-DD format
+ * Get today's date in YYYY-MM-DD format (PKT)
  */
 export function getTodayDate(): string {
-  return new Date().toISOString().split("T")[0];
+  const now = new Date();
+  // Format the date in PKT timezone
+  const pktDateString = now.toLocaleDateString("en-CA", {
+    timeZone: "Asia/Karachi",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  // Returns format: YYYY-MM-DD
+  return pktDateString;
 }
 
 /**

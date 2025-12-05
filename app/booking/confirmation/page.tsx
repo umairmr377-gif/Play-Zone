@@ -115,11 +115,13 @@ function ConfirmationContent() {
     return null; // Still loading
   }
 
-  const bookingDate = new Date(booking.date).toLocaleDateString("en-US", {
+  const { toPKT } = require("@/lib/utils");
+  const bookingDate = toPKT(booking.date).toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
     month: "long",
     day: "numeric",
+    timeZone: "Asia/Karachi",
   });
 
   return (
@@ -178,12 +180,12 @@ function ConfirmationContent() {
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Price per hour:</span>
-              <span className="font-medium">${court.pricePerHour}</span>
+              <span className="font-medium">PKR {court.pricePerHour.toLocaleString()}</span>
             </div>
             <div className="border-t pt-3 mt-3">
               <div className="flex justify-between text-lg font-bold">
                 <span>Total Amount:</span>
-                <span className="text-primary-600">${booking.totalPrice}</span>
+                <span className="text-primary-600">PKR {booking.totalPrice.toLocaleString()}</span>
               </div>
             </div>
           </div>

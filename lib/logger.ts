@@ -16,7 +16,24 @@ interface LogContext {
 
 class Logger {
   private log(level: LogLevel, message: string, context?: LogContext) {
-    const timestamp = new Date().toISOString();
+    // Format timestamp in PKT (UTC+5) timezone
+    const now = new Date();
+    // Use toLocaleString with timeZone to get PKT time, then format as ISO
+    const pktString = now.toLocaleString("en-US", {
+      timeZone: "Asia/Karachi",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+    // Parse the formatted string: "MM/DD/YYYY, HH:mm:ss"
+    const [datePart, timePart] = pktString.split(", ");
+    const [month, day, year] = datePart.split("/");
+    // Format as ISO: YYYY-MM-DDTHH:mm:ss+05:00
+    const timestamp = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T${timePart}+05:00`;
     const logEntry = {
       timestamp,
       level,

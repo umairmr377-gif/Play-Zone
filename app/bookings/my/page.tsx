@@ -59,20 +59,20 @@ export default function MyBookingsPage() {
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
+    const { toPKT } = require("@/lib/utils");
+    const pktDate = toPKT(dateString);
+    return pktDate.toLocaleDateString("en-US", {
       weekday: "long",
       year: "numeric",
       month: "long",
       day: "numeric",
+      timeZone: "Asia/Karachi",
     });
   };
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(amount);
+    const { formatPKR } = require("@/lib/utils");
+    return formatPKR(amount);
   };
 
   if (loading) {

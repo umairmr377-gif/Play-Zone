@@ -56,11 +56,24 @@ CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
 -- Composite index for booking conflict detection
 CREATE INDEX IF NOT EXISTS idx_bookings_court_date_time ON bookings(court_id, date, start_time, end_time);
 
--- Function to update updated_at timestamp
+-- Set timezone to Pakistan Standard Time (PKT - UTC+5)
+-- Note: This sets timezone for the session. For database-level setting,
+-- configure it in Supabase project settings or connection string.
+SET timezone = 'Asia/Karachi';
+
+-- Function to get current timestamp in PKT
+CREATE OR REPLACE FUNCTION now_pkt()
+RETURNS TIMESTAMP WITH TIME ZONE AS $$
+BEGIN
+  RETURN (NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi';
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to update updated_at timestamp (uses PKT)
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
-  NEW.updated_at = NOW();
+  NEW.updated_at = (NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Karachi';
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

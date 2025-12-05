@@ -19,7 +19,10 @@ export default function BookingPage() {
   const courtId = params.courtId as string;
   const [sport, setSport] = useState<Sport | null>(null);
   const [court, setCourt] = useState<Court | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string>("");
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const { getTodayDate } = require("@/lib/utils");
+    return getTodayDate();
+  });
   const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -28,6 +31,10 @@ export default function BookingPage() {
   const [error, setError] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
+  const [minDate, setMinDate] = useState<string>(() => {
+    const { getTodayDate } = require("@/lib/utils");
+    return getTodayDate();
+  });
 
   useEffect(() => {
     fetchSportAndCourt();
@@ -62,10 +69,25 @@ export default function BookingPage() {
     }
   };
 
+  // Keep selectedDate and minDate updated when crossing midnight
   useEffect(() => {
-    // Set default date to today
-    const today = new Date().toISOString().split("T")[0];
-    setSelectedDate(today);
+    const { getTodayDate } = require("@/lib/utils");
+
+    // Update dates when crossing midnight (check every minute)
+    const interval = setInterval(() => {
+      const today = getTodayDate();
+      setMinDate(today);
+      setSelectedDate((currentDate) => {
+        // Only update if user hasn't manually selected a future date
+        // If current date is today or past, update to new today
+        if (!currentDate || currentDate <= today) {
+          return today;
+        }
+        return currentDate;
+      });
+    }, 60000); // Check every minute
+
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -222,7 +244,7 @@ export default function BookingPage() {
                 <p className="text-text-secondary">{court.location}</p>
               </div>
               <Badge variant="info" className="text-base px-4 py-2">
-                ${court.pricePerHour}/hour
+                PKR {court.pricePerHour.toLocaleString()}/hour
               </Badge>
             </div>
           </Card>
@@ -274,7 +296,7 @@ export default function BookingPage() {
                 setSelectedDate(e.target.value);
                 setSelectedSlots([]);
               }}
-              min={new Date().toISOString().split("T")[0]}
+              min={minDate}
               className="w-full px-4 py-3 border border-white/10 rounded-xl focus:ring-2 focus:ring-white/20 focus:border-white/20 transition-all bg-[#0A0A0C]/80 backdrop-blur-sm text-white placeholder-white/30 shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
               required
             />
@@ -318,7 +340,10 @@ export default function BookingPage() {
                 <span className="text-white/50 font-light">Date:</span>
                 <span className="font-semibold text-white">
                   {selectedDate
-                    ? new Date(selectedDate).toLocaleDateString()
+                    ? (() => {
+                        const { formatDate } = require("@/lib/utils");
+                        return formatDate(selectedDate);
+                      })()
                     : "Not selected"}
                 </span>
               </div>
@@ -328,12 +353,12 @@ export default function BookingPage() {
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-white/50 font-light">Price per hour:</span>
-                <span className="font-semibold text-white numbers">${court.pricePerHour}</span>
+                <span className="font-semibold text-white numbers">PKR {court.pricePerHour.toLocaleString()}</span>
               </div>
               <div className="border-t border-white/10 pt-4 mt-4">
                 <div className="flex justify-between text-xl font-display font-black">
                   <span className="text-white">Total:</span>
-                  <span className="text-white numbers">${totalPrice}</span>
+                  <span className="text-white numbers">PKR {totalPrice.toLocaleString()}</span>
                 </div>
               </div>
             </div>

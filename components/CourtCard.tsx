@@ -27,7 +27,7 @@ export default function CourtCard({
           {/* Price Badge Overlay */}
           <div className="absolute top-4 right-4 z-10">
             <Badge variant="info" className="shadow-smooth text-base px-4 py-1.5">
-              ${court.pricePerHour}/hour
+              PKR {court.pricePerHour.toLocaleString()}/hour
             </Badge>
           </div>
           {/* Gradient Overlay */}
@@ -42,7 +42,7 @@ export default function CourtCard({
           </div>
           {!court.image && (
             <Badge variant="info" className="ml-4">
-              ${court.pricePerHour}/hour
+              PKR {court.pricePerHour.toLocaleString()}/hour
             </Badge>
           )}
         </div>

@@ -12,6 +12,8 @@
     "db:studio": "prisma studio",
     "db:generate": "prisma generate",
     "backup": "tsx scripts/backup-supabase.ts",
+    "update-prices": "tsx scripts/update-prices.ts",
+    "set-timezone": "tsx scripts/set-timezone-pkt.ts",
     "health": "curl http://localhost:3000/api/health"
   },
   "engines": {
