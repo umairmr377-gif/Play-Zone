@@ -82,11 +82,10 @@ export default function AuthButton() {
               profile = data;
               setProfilesTableExists(true); // Cache that table exists
             } else if (error) {
-              // Check if it's a table not found error (404) or schema cache error
+              // Check if it's a table not found error or schema cache error
+              // PostgrestError only has: message, details, hint, code (no status property)
               const errorMessage = error.message || "";
-              const errorAny = error as any; // Type assertion for PostgrestError which may have status
               const isTableMissing = 
-                errorAny.status === 404 ||
                 error.code === "PGRST116" ||
                 error.code === "42P01" ||
                 errorMessage.includes("schema cache") ||

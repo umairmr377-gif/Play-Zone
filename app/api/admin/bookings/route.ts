@@ -4,6 +4,9 @@ import { requireAdmin } from "@/lib/auth";
 import { logAdminMutation } from "@/lib/audit";
 import { logger } from "@/lib/logger";
 
+// Force Node.js runtime for Supabase compatibility
+export const runtime = 'nodejs';
+
 // GET /api/admin/bookings
 export async function GET(request: NextRequest) {
   try {

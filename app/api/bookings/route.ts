@@ -4,6 +4,9 @@ import { bookingRateLimiter } from "@/lib/rateLimit";
 import { logger } from "@/lib/logger";
 import { createRouteHandlerClient } from "@/lib/supabase/server";
 
+// Force Node.js runtime for Supabase compatibility
+export const runtime = 'nodejs';
+
 // GET /api/bookings
 export async function GET(request: NextRequest) {
   try {

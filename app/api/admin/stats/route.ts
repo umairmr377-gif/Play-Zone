@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { getAdminStats } from "@/lib/admin";
 
+// Force Node.js runtime for Supabase compatibility
+export const runtime = 'nodejs';
+
 // GET /api/admin/stats
 export async function GET() {
   try {

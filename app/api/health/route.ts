@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 
+// Force Node.js runtime for process.* APIs
+export const runtime = 'nodejs';
+
 /**
  * Health check endpoint
  * GET /api/health

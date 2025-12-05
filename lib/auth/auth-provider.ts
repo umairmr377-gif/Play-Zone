@@ -139,7 +139,8 @@ function getSupabaseAuthProvider(): AuthProvider {
           .single();
         
         // Only use profile if no error or error is not a 404/table missing
-        if (!error || (error.status !== 404 && error.code !== "PGRST116" && error.code !== "42P01")) {
+        // PostgrestError doesn't have status property, only code
+        if (!error || (error.code !== "PGRST116" && error.code !== "42P01")) {
           profile = data;
         }
       } catch {
@@ -178,7 +179,8 @@ function getSupabaseAuthProvider(): AuthProvider {
           .single();
         
         // Only use profile if no error or error is not a 404/table missing
-        if (!error || (error.status !== 404 && error.code !== "PGRST116" && error.code !== "42P01")) {
+        // PostgrestError doesn't have status property, only code
+        if (!error || (error.code !== "PGRST116" && error.code !== "42P01")) {
           profile = data;
         }
       } catch {

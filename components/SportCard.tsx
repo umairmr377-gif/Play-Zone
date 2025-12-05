@@ -20,7 +20,9 @@ export default function SportCard({ sport, className = "", showTag = null }: Spo
   const [isHovered, setIsHovered] = useState(false);
 
   // Determine tag based on sport index or props
-  const tag = showTag || (sport.id <= 2 ? "trending" : sport.id === 3 ? "hot" : null);
+  // Note: sport.id is a string (UUID), so we can't compare it directly
+  // For now, use showTag prop or null (trending/hot logic should be handled by parent)
+  const tag = showTag || null;
 
   const tagConfig = {
     trending: { icon: TrendingUp, text: "Trending", color: "bg-[#0C0C10] border-white/20", glow: "shadow-[0_4px_16px_rgba(0,0,0,0.4)]" },

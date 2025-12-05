@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Card from "@/components/ui/Card";
@@ -11,7 +11,7 @@ import ErrorMessage from "@/components/ErrorMessage";
 import { CheckCircle2 } from "lucide-react";
 import { Booking, Sport, Court } from "@/data/types";
 
-export default function ConfirmationPage() {
+function ConfirmationContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [booking, setBooking] = useState<Booking | null>(null);
@@ -200,5 +200,20 @@ export default function ConfirmationPage() {
         </div>
       </Card>
     </div>
+  );
+}
+
+export default function ConfirmationPage() {
+  return (
+    <Suspense fallback={
+      <div className="py-12">
+        <Card className="p-8 text-center">
+          <LoadingSpinner size="lg" className="mb-4" />
+          <p className="text-gray-600">Loading...</p>
+        </Card>
+      </div>
+    }>
+      <ConfirmationContent />
+    </Suspense>
   );
 }

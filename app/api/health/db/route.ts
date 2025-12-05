@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { createServerComponentClient } from "@/lib/supabaseServer";
 
+// Force Node.js runtime for Supabase compatibility
+export const runtime = 'nodejs';
+
 /**
  * Database health check endpoint
  * GET /api/health/db

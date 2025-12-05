@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { CheckCircle2, Printer, ArrowLeft } from "lucide-react";
 import Card from "@/components/Card";
@@ -11,7 +11,7 @@ import EmptyState from "@/components/EmptyState";
 import { Booking } from "@/lib/booking";
 import { formatDate, formatCurrency } from "@/lib/utils";
 
-export default function ConfirmationPage() {
+function ConfirmationContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [booking, setBooking] = useState<Booking | null>(null);
@@ -157,6 +157,21 @@ export default function ConfirmationPage() {
         </div>
       </Card>
     </div>
+  );
+}
+
+export default function ConfirmationPage() {
+  return (
+    <Suspense fallback={
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <Card className="p-8 text-center">
+          <LoadingSpinner size="lg" className="mb-4" />
+          <p className="text-gray-600">Loading...</p>
+        </Card>
+      </div>
+    }>
+      <ConfirmationContent />
+    </Suspense>
   );
 }
 

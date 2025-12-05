@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { getServerClient } from "@/lib/supabaseServer";
 
+// Force Node.js runtime for Supabase compatibility
+export const runtime = 'nodejs';
+
 // GET /api/admin/audit - Get audit logs
 export async function GET(request: NextRequest) {
   try {

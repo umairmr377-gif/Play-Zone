@@ -8,6 +8,9 @@ import {
 } from "@/lib/admin";
 import { requireAdmin } from "@/lib/auth";
 import { logAdminMutation } from "@/lib/audit";
+
+// Force Node.js runtime for Supabase compatibility
+export const runtime = 'nodejs';
 import { logger } from "@/lib/logger";
 
 // GET /api/admin/sports

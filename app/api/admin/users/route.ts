@@ -6,6 +6,9 @@ import { isSupabaseConfigured } from "@/lib/safe-supabase";
 import { logAdminMutation } from "@/lib/audit";
 import { logger } from "@/lib/logger";
 
+// Force Node.js runtime for Supabase and process.env compatibility
+export const runtime = 'nodejs';
+
 // GET /api/admin/users - List all users
 export async function GET(request: NextRequest) {
   try {

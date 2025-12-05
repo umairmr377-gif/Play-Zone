@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { getAllSports } from "@/lib/sports";
 
+// Force Node.js runtime for Supabase compatibility
+export const runtime = 'nodejs';
+
 // GET /api/sports
 export async function GET() {
   try {

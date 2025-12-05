@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getBookingById } from "@/lib/bookings";
 
+// Force Node.js runtime for Supabase compatibility
+export const runtime = 'nodejs';
+
 // GET /api/bookings/[bookingId]
 export async function GET(
   request: NextRequest,

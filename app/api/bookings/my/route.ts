@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createRouteHandlerClient, createServiceRoleClient } from "@/lib/supabase/server";
 
+// Force Node.js runtime for Supabase compatibility
+export const runtime = 'nodejs';
+
 // GET /api/bookings/my - Get current user's bookings
 export async function GET(request: NextRequest) {
   try {
