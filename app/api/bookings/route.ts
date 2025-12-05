@@ -117,6 +117,8 @@ export async function POST(request: NextRequest) {
         pricePerHour: pricePerHourValue,
         totalPrice: total,
         userId: userId || undefined, // Ensure it's undefined if null
+        customerName: customerName || userName || undefined,
+        customerEmail: customerEmail || undefined,
       });
 
       // Log successful booking

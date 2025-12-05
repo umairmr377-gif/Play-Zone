@@ -30,10 +30,20 @@ export default function SportsPage() {
     fetchSports();
   }, []);
 
-  // Filter logic (can be expanded)
-  const filteredSports = filter === "all" 
-    ? sports 
-    : sports.filter((sport) => sport.name.toLowerCase().includes(filter.toLowerCase()));
+  // Filter logic
+  const filteredSports = (() => {
+    if (filter === "all") {
+      return sports;
+    } else if (filter === "trending") {
+      // Show first 3 sports as "trending"
+      return sports.slice(0, 3);
+    } else if (filter === "popular") {
+      // Show all sports (can be enhanced with actual popularity metrics later)
+      return sports;
+    }
+    // Fallback: filter by name if filter is a sport name
+    return sports.filter((sport) => sport.name.toLowerCase().includes(filter.toLowerCase()));
+  })();
 
   // Categorize sports for horizontal scroll
   const trendingSports = sports.slice(0, 3);

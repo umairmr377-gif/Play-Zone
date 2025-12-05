@@ -35,88 +35,97 @@ export interface Database {
     Tables: {
       sports: {
         Row: {
-          id: number;
+          id: string; // UUID
           name: string;
           description: string | null;
           image: string | null;
+          icon: string | null;
           created_at: string;
         };
         Insert: {
-          id?: number;
+          id?: string; // UUID
           name: string;
           description?: string | null;
           image?: string | null;
+          icon?: string | null;
           created_at?: string;
         };
         Update: {
-          id?: number;
+          id?: string; // UUID
           name?: string;
           description?: string | null;
           image?: string | null;
+          icon?: string | null;
           created_at?: string;
         };
       };
       courts: {
         Row: {
-          id: number;
-          sport_id: number;
+          id: string; // UUID
+          sport_id: string; // UUID reference to sports
           name: string;
-          price_per_hour: number;
           location: string | null;
-          extra_info: Record<string, any> | null;
+          price_per_hour: number; // NUMERIC(10, 2)
+          image_url: string | null;
           created_at: string;
         };
         Insert: {
-          id?: number;
-          sport_id: number;
+          id?: string; // UUID
+          sport_id: string; // UUID reference to sports
           name: string;
-          price_per_hour: number;
           location?: string | null;
-          extra_info?: Record<string, any> | null;
+          price_per_hour: number; // NUMERIC(10, 2)
+          image_url?: string | null;
           created_at?: string;
         };
         Update: {
-          id?: number;
-          sport_id?: number;
+          id?: string; // UUID
+          sport_id?: string; // UUID reference to sports
           name?: string;
-          price_per_hour?: number;
           location?: string | null;
-          extra_info?: Record<string, any> | null;
+          price_per_hour?: number; // NUMERIC(10, 2)
+          image_url?: string | null;
           created_at?: string;
         };
       };
       bookings: {
         Row: {
-          id: number;
-          sport_id: number;
-          court_id: number;
-          date: string;
-          time_slot: string;
-          user_name: string | null;
-          status: string;
-          price: number;
+          id: string; // UUID
+          user_id: string | null; // UUID reference to auth.users
+          court_id: string; // UUID reference to courts
+          date: string; // DATE
+          start_time: string; // TIME
+          end_time: string; // TIME
+          status: "pending" | "confirmed" | "cancelled" | "completed";
+          price: number; // NUMERIC(10, 2)
+          customer_name: string | null;
+          customer_email: string | null;
           created_at: string;
         };
         Insert: {
-          id?: number;
-          sport_id: number;
-          court_id: number;
-          date: string;
-          time_slot: string;
-          user_name?: string | null;
-          status?: string;
-          price: number;
+          id?: string; // UUID
+          user_id?: string | null; // UUID reference to auth.users
+          court_id: string; // UUID reference to courts
+          date: string; // DATE
+          start_time: string; // TIME
+          end_time: string; // TIME
+          status?: "pending" | "confirmed" | "cancelled" | "completed";
+          price: number; // NUMERIC(10, 2)
+          customer_name?: string | null;
+          customer_email?: string | null;
           created_at?: string;
         };
         Update: {
-          id?: number;
-          sport_id?: number;
-          court_id?: number;
-          date?: string;
-          time_slot?: string;
-          user_name?: string | null;
-          status?: string;
-          price?: number;
+          id?: string; // UUID
+          user_id?: string | null; // UUID reference to auth.users
+          court_id?: string; // UUID reference to courts
+          date?: string; // DATE
+          start_time?: string; // TIME
+          end_time?: string; // TIME
+          status?: "pending" | "confirmed" | "cancelled" | "completed";
+          price?: number; // NUMERIC(10, 2)
+          customer_name?: string | null;
+          customer_email?: string | null;
           created_at?: string;
         };
       };
