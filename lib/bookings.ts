@@ -481,3 +481,67 @@ export async function updateBooking(bookingId: string, updates: {
     status: data.status || "confirmed",
   };
 }
+
+/**
+ * Update booking status (server-side only, admin)
+ */
+export async function updateBookingStatus(
+  bookingId: string,
+  status: "pending" | "confirmed" | "cancelled" | "completed"
+): Promise<Booking> {
+  const client = getServerClient();
+  
+  if (!client) {
+    throw new Error("Database is not configured. Please set up Supabase to update bookings.");
+  }
+
+  const { data, error } = await (client as any)
+    .from("bookings")
+    .update({ status })
+    .eq("id", bookingId)
+    .select(`
+      *,
+      courts!inner(
+        id,
+        name,
+        sport_id,
+        sports!inner(
+          id,
+          name
+        )
+      )
+    `)
+    .single();
+
+  if (error) {
+    throw new Error(`Error updating booking status: ${error.message}`);
+  }
+
+  // Convert start_time and end_time to timeSlots array
+  const timeSlots: string[] = [];
+  if (data.start_time && data.end_time) {
+    const start = new Date(`2000-01-01T${data.start_time}`);
+    const end = new Date(`2000-01-01T${data.end_time}`);
+    const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+    
+    for (let i = 0; i < durationHours; i++) {
+      const slotTime = new Date(start.getTime() + i * 60 * 60 * 1000);
+      const hours = String(slotTime.getHours()).padStart(2, '0');
+      const minutes = String(slotTime.getMinutes()).padStart(2, '0');
+      timeSlots.push(`${hours}:${minutes}`);
+    }
+  }
+
+  return {
+    id: data.id.toString(),
+    sportId: data.courts?.sports?.name || "",
+    courtId: data.courts?.name || "",
+    date: data.date,
+    timeSlots: timeSlots,
+    customerName: data.customer_name || "",
+    customerEmail: data.customer_email || "",
+    totalPrice: Number(data.price) || 0,
+    createdAt: data.created_at,
+    status: data.status || "confirmed",
+  };
+}

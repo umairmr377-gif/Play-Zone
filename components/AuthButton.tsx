@@ -84,8 +84,9 @@ export default function AuthButton() {
             } else if (error) {
               // Check if it's a table not found error (404) or schema cache error
               const errorMessage = error.message || "";
+              const errorAny = error as any; // Type assertion for PostgrestError which may have status
               const isTableMissing = 
-                error.status === 404 ||
+                errorAny.status === 404 ||
                 error.code === "PGRST116" ||
                 error.code === "42P01" ||
                 errorMessage.includes("schema cache") ||
