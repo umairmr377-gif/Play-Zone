@@ -10,16 +10,16 @@ export default function Badge({
   className = "",
 }: BadgeProps) {
   const variants = {
-    default: "bg-primary/10 text-primary border border-primary/20",
-    success: "bg-accent/10 text-accent border border-accent/20",
-    warning: "bg-yellow-500/10 text-yellow-500 border border-yellow-500/20",
-    danger: "bg-danger/10 text-danger border border-danger/20",
-    info: "bg-primary/10 text-primary border border-primary/20",
+    default: "bg-[#0C0C10]/80 backdrop-blur-sm text-white/80 border border-white/20",
+    success: "bg-[#0C0C10]/80 backdrop-blur-sm text-white/80 border border-white/20",
+    warning: "bg-[#0C0C10]/80 backdrop-blur-sm text-white/80 border border-white/20",
+    danger: "bg-[#0C0C10]/80 backdrop-blur-sm text-white/80 border border-white/20",
+    info: "bg-[#0C0C10]/80 backdrop-blur-sm text-white/80 border border-white/20",
   };
 
   return (
     <span
-      className={`inline-flex items-center px-3 py-1 rounded-xl text-xs font-semibold ${variants[variant]} ${className}`}
+      className={`inline-flex items-center px-3 py-1 rounded-lg text-xs font-semibold tracking-wide ${variants[variant]} ${className}`}
     >
       {children}
     </span>

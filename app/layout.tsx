@@ -16,10 +16,10 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: "/branding/playzone/favicon.svg", type: "image/svg+xml" },
-      { url: "/branding/playzone/favicon.ico", sizes: "any" },
+      { url: "/favicon.svg", type: "image/svg+xml", sizes: "any" },
     ],
     apple: [
-      { url: "/branding/playzone/app-icon-512.png", sizes: "512x512", type: "image/png" },
+      { url: "/branding/playzone/favicon.svg", sizes: "512x512", type: "image/svg+xml" },
     ],
   },
 };

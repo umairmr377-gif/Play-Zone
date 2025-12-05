@@ -13,14 +13,16 @@ export default function SupabaseSetupWarning() {
 
   return (
     <div className="fixed bottom-4 right-4 max-w-md z-50 animate-slide-in">
-      <Card className="p-4 border-2 border-primary/30 bg-primary/10" hover={false}>
+      <Card className="p-4 border border-white/10" hover={false}>
         <div className="flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+          <div className="w-9 h-9 rounded-xl bg-[#0C0C10] border border-white/10 flex items-center justify-center flex-shrink-0">
+            <AlertCircle className="w-5 h-5 text-white/80" />
+          </div>
           <div className="flex-1">
-            <h3 className="text-sm font-semibold text-primary mb-1">
+            <h3 className="text-sm font-display font-semibold text-white mb-2 tracking-tight">
               Supabase Not Configured
             </h3>
-            <p className="text-xs text-text-secondary mb-3">
+            <p className="text-xs text-white/50 mb-4 font-light leading-relaxed">
               Authentication features are disabled. Set up Supabase to enable sign-in and bookings.
             </p>
             <div className="flex flex-col gap-2">
@@ -28,14 +30,14 @@ export default function SupabaseSetupWarning() {
                 href="https://app.supabase.com"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-primary hover:text-primary-light font-medium flex items-center gap-1"
+                className="text-xs text-white/70 hover:text-white font-medium flex items-center gap-1 transition-colors tracking-wide"
               >
                 Get Supabase Credentials
                 <ExternalLink className="w-3 h-3" />
               </Link>
               <Link
                 href="/QUICK_FIX_SUPABASE.md"
-                className="text-xs text-text-secondary hover:text-text-primary font-medium"
+                className="text-xs text-white/50 hover:text-white/70 font-medium transition-colors tracking-wide"
               >
                 View Setup Instructions →
               </Link>

@@ -15,7 +15,7 @@ export default function AdminLayout({
   const supabaseConfigured = isSupabaseConfigured();
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#0A0A0C]">
       <AdminTopbar onMenuClick={() => setSidebarOpen(!sidebarOpen)} />
       <AdminSidebar
         isOpen={sidebarOpen}

@@ -84,14 +84,14 @@ export const sports: Sport[] = [
     id: "paddle",
     name: "Paddle Tennis",
     description: "Experience the excitement of paddle tennis on our premium courts. Perfect for singles or doubles matches with climate-controlled environment.",
-    image: "/images/paddle.jpg",
+    image: "/images/padel.jpg",
     courts: [
       {
         id: "paddle-1",
         name: "Paddle Court 1",
         location: "Building 1, First Floor",
         pricePerHour: 40,
-        image: "/images/paddle-court-1.jpg",
+        image: "/images/padel-court-1.jpeg",
         availableTimeSlots: generateTimeSlots(),
       },
       {
@@ -99,7 +99,7 @@ export const sports: Sport[] = [
         name: "Paddle Court 2",
         location: "Building 1, First Floor",
         pricePerHour: 40,
-        image: "/images/paddle-court-2.jpg",
+        image: "/images/padel-court-2.jpeg",
         availableTimeSlots: generateTimeSlots(),
       },
       {
@@ -107,7 +107,7 @@ export const sports: Sport[] = [
         name: "Paddle Court 3",
         location: "Building 2, First Floor",
         pricePerHour: 45,
-        image: "/images/paddle-court-3.jpg",
+        image: "/images/padel-court-3.jpg",
         availableTimeSlots: generateTimeSlots(),
       },
     ],

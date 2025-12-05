@@ -145,7 +145,7 @@ export default function AuthButton() {
   if (!user) {
     return (
       <Link href="/auth/login">
-        <button className="px-6 py-2.5 rounded-xl bg-primary text-white font-medium text-sm hover:bg-primary-dark shadow-smooth hover:shadow-glow transition-all duration-300 active:scale-95">
+        <button className="px-6 py-2.5 rounded-xl bg-[#0C0C10] text-white font-medium text-sm border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.05)] hover:border-white/20 hover:shadow-[0_12px_48px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.1)] hover:scale-[1.01] active:scale-[0.98] transition-all duration-300 tracking-wide">
           Sign In
         </button>
       </Link>
@@ -156,12 +156,12 @@ export default function AuthButton() {
     <div className="relative">
       <button
         onClick={() => setShowMenu(!showMenu)}
-        className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-background-card transition-colors duration-300"
+        className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-[#0C0C10]/50 border border-transparent hover:border-white/10 transition-all duration-300"
       >
-        <div className="w-9 h-9 bg-primary rounded-full flex items-center justify-center text-white text-sm font-semibold shadow-smooth">
+        <div className="w-9 h-9 bg-[#0C0C10] border border-white/10 rounded-full flex items-center justify-center text-white text-sm font-semibold shadow-[0_4px_16px_rgba(0,0,0,0.3)]">
           {user.full_name?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || "U"}
         </div>
-        <span className="hidden md:block text-sm font-medium text-text-primary">
+        <span className="hidden md:block text-sm font-medium text-white/90 tracking-wide">
           {user.full_name || user.email?.split("@")[0] || "User"}
         </span>
       </button>
@@ -172,15 +172,15 @@ export default function AuthButton() {
             className="fixed inset-0 z-10"
             onClick={() => setShowMenu(false)}
           />
-          <div className="absolute right-0 mt-2 w-56 card-glass rounded-2xl shadow-smooth border border-white/10 z-20 animate-slide-in">
-            <div className="p-3">
-              <div className="px-3 py-3 border-b border-white/10">
-                <p className="text-sm font-semibold text-text-primary">
+          <div className="absolute right-0 mt-2 w-64 bg-[#0A0A0C]/95 backdrop-blur-xl rounded-2xl shadow-[0_12px_48px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.05)] border border-white/10 z-20 animate-slide-in">
+            <div className="p-4">
+              <div className="px-4 py-4 border-b border-white/10 mb-2">
+                <p className="text-sm font-semibold text-white mb-1 tracking-wide">
                   {user.full_name || "User"}
                 </p>
-                <p className="text-xs text-text-secondary mt-1">{user.email}</p>
+                <p className="text-xs text-white/50 font-light">{user.email}</p>
                 {user.role === "admin" && (
-                  <span className="inline-block mt-2 px-2.5 py-1 text-xs font-semibold bg-danger/10 text-danger rounded-xl">
+                  <span className="inline-block mt-3 px-3 py-1 text-xs font-semibold bg-[#0C0C10] border border-white/20 text-white rounded-xl">
                     Admin
                   </span>
                 )}
@@ -188,30 +188,30 @@ export default function AuthButton() {
               
               <Link
                 href="/bookings/my"
-                className="flex items-center gap-2 px-3 py-2.5 text-sm text-text-primary hover:bg-background-card rounded-xl transition-colors duration-300 mt-1"
+                className="flex items-center gap-3 px-4 py-3 text-sm text-white/70 hover:text-white hover:bg-[#0C0C10]/50 rounded-xl transition-all duration-300 mb-1 group"
                 onClick={() => setShowMenu(false)}
               >
                 <Calendar className="w-4 h-4" />
-                My Bookings
+                <span className="font-medium tracking-wide">My Bookings</span>
               </Link>
 
               {user.role === "admin" && (
                 <Link
                   href="/admin"
-                  className="flex items-center gap-2 px-3 py-2.5 text-sm text-text-primary hover:bg-background-card rounded-xl transition-colors duration-300 mt-1"
+                  className="flex items-center gap-3 px-4 py-3 text-sm text-white/70 hover:text-white hover:bg-[#0C0C10]/50 rounded-xl transition-all duration-300 mb-1 group"
                   onClick={() => setShowMenu(false)}
                 >
                   <Settings className="w-4 h-4" />
-                  Admin Panel
+                  <span className="font-medium tracking-wide">Admin Panel</span>
                 </Link>
               )}
 
               <button
                 onClick={handleLogout}
-                className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-danger hover:bg-danger/10 rounded-xl transition-colors duration-300 mt-1"
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white/70 hover:text-white hover:bg-[#0C0C10]/50 rounded-xl transition-all duration-300 mt-2 border-t border-white/10 pt-3"
               >
                 <LogOut className="w-4 h-4" />
-                Sign Out
+                <span className="font-medium tracking-wide">Sign Out</span>
               </button>
             </div>
           </div>

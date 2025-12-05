@@ -26,42 +26,44 @@ export default function BookingSummary({
 
   return (
     <Card className={`p-6 sticky top-24 ${className}`}>
-      <h3 className="text-xl font-bold text-gray-900 mb-4">Booking Summary</h3>
+      <h3 className="text-xl font-display font-black text-white mb-6 tracking-tight">Booking Summary</h3>
       
-      <div className="space-y-4 mb-6">
+      <div className="space-y-4 mb-8">
         <div className="flex justify-between text-sm">
-          <span className="text-gray-600">Sport:</span>
-          <span className="font-medium">{sport.name}</span>
+          <span className="text-white/50 font-light">Sport:</span>
+          <span className="font-semibold text-white">{sport.name}</span>
         </div>
         
         <div className="flex justify-between text-sm">
-          <span className="text-gray-600">Court:</span>
-          <span className="font-medium">{court.name}</span>
+          <span className="text-white/50 font-light">Court:</span>
+          <span className="font-semibold text-white">{court.name}</span>
         </div>
         
         <div className="flex justify-between text-sm">
-          <span className="text-gray-600">Location:</span>
-          <span className="font-medium text-right max-w-[60%]">{court.location}</span>
+          <span className="text-white/50 font-light">Location:</span>
+          <span className="font-semibold text-white text-right max-w-[60%]">{court.location}</span>
         </div>
         
         <div className="flex justify-between text-sm">
-          <span className="text-gray-600">Time Slot:</span>
+          <span className="text-white/50 font-light">Time Slot:</span>
           {slot ? (
-            <Badge variant="success">{slot}</Badge>
+            <Badge variant="success" className="bg-[#0C0C10]/80 backdrop-blur-sm border-white/20 text-white">
+              {slot}
+            </Badge>
           ) : (
-            <span className="text-gray-400">Not selected</span>
+            <span className="text-white/30">Not selected</span>
           )}
         </div>
         
         <div className="flex justify-between text-sm">
-          <span className="text-gray-600">Price per hour:</span>
-          <span className="font-medium">${court.pricePerHour}</span>
+          <span className="text-white/50 font-light">Price per hour:</span>
+          <span className="font-semibold text-white numbers">${court.pricePerHour}</span>
         </div>
         
-        <div className="border-t pt-4">
-          <div className="flex justify-between text-lg font-bold">
-            <span>Total:</span>
-            <span className="text-primary-600">${totalPrice}</span>
+        <div className="border-t border-white/10 pt-4 mt-4">
+          <div className="flex justify-between text-lg font-display font-black">
+            <span className="text-white">Total:</span>
+            <span className="text-white numbers">${totalPrice}</span>
           </div>
         </div>
       </div>
@@ -69,8 +71,8 @@ export default function BookingSummary({
       {onConfirm && (
         <>
           {!supabaseConfigured && (
-            <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p className="text-xs text-yellow-800">
+            <div className="mb-4 p-3 bg-[#0C0C10]/80 backdrop-blur-sm border border-white/10 rounded-xl">
+              <p className="text-xs text-white/60">
                 ⚠️ Bookings are disabled. Please configure Supabase to enable booking functionality.
               </p>
             </div>

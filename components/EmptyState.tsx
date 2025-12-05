@@ -20,13 +20,13 @@ export default function EmptyState({
 }: EmptyStateProps) {
   return (
     <div className={`text-center py-12 px-4 ${className}`}>
-      <div className="flex justify-center mb-4">
-        <div className="rounded-full bg-gray-100 p-4">
-          <Icon className="w-12 h-12 text-gray-400" />
+      <div className="flex justify-center mb-6">
+        <div className="rounded-full bg-[#0C0C10] border border-white/10 p-6 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+          <Icon className="w-12 h-12 text-white/60" />
         </div>
       </div>
-      <h3 className="text-xl font-semibold text-gray-900 mb-2">{title}</h3>
-      <p className="text-gray-600 mb-6 max-w-md mx-auto">{message}</p>
+      <h3 className="text-2xl font-display font-black text-white mb-3 tracking-tight">{title}</h3>
+      <p className="text-white/50 mb-8 max-w-md mx-auto font-light leading-relaxed">{message}</p>
       {actionLabel && onAction && (
         <Button onClick={onAction}>{actionLabel}</Button>
       )}

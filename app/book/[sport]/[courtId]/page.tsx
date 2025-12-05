@@ -264,7 +264,7 @@ export default function BookingPage() {
 
           {/* Date Selection */}
           <Card className="p-6" hover={false}>
-            <h3 className="text-xl font-display font-semibold text-text-primary mb-6">
+            <h3 className="text-xl font-display font-bold text-white mb-6 tracking-tight">
               Select Date
             </h3>
             <input
@@ -275,7 +275,7 @@ export default function BookingPage() {
                 setSelectedSlots([]);
               }}
               min={new Date().toISOString().split("T")[0]}
-              className="w-full px-4 py-3 border-2 border-primary/20 rounded-xl focus:ring-2 focus:ring-primary focus:border-primary transition-all bg-background-card text-text-primary"
+              className="w-full px-4 py-3 border border-white/10 rounded-xl focus:ring-2 focus:ring-white/20 focus:border-white/20 transition-all bg-[#0A0A0C]/80 backdrop-blur-sm text-white placeholder-white/30 shadow-[0_4px_16px_rgba(0,0,0,0.3)]"
               required
             />
           </Card>
@@ -302,38 +302,38 @@ export default function BookingPage() {
         {/* Booking Summary - Glass Card */}
         <div className="lg:col-span-1">
           <Card className="p-6 sticky top-32" hover={false}>
-            <h3 className="text-2xl font-display font-bold text-text-primary mb-6">
+            <h3 className="text-2xl font-display font-black text-white mb-6 tracking-tight">
               Booking Summary
             </h3>
             <div className="space-y-4 mb-8">
               <div className="flex justify-between text-sm">
-                <span className="text-text-secondary">Sport:</span>
-                <span className="font-semibold text-text-primary">{sport.name}</span>
+                <span className="text-white/50 font-light">Sport:</span>
+                <span className="font-semibold text-white">{sport.name}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-text-secondary">Court:</span>
-                <span className="font-semibold text-text-primary">{court.name}</span>
+                <span className="text-white/50 font-light">Court:</span>
+                <span className="font-semibold text-white">{court.name}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-text-secondary">Date:</span>
-                <span className="font-semibold text-text-primary">
+                <span className="text-white/50 font-light">Date:</span>
+                <span className="font-semibold text-white">
                   {selectedDate
                     ? new Date(selectedDate).toLocaleDateString()
                     : "Not selected"}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-text-secondary">Time Slots:</span>
-                <span className="font-semibold text-text-primary">{selectedSlots.length}</span>
+                <span className="text-white/50 font-light">Time Slots:</span>
+                <span className="font-semibold text-white">{selectedSlots.length}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-text-secondary">Price per hour:</span>
-                <span className="font-semibold text-text-primary">${court.pricePerHour}</span>
+                <span className="text-white/50 font-light">Price per hour:</span>
+                <span className="font-semibold text-white numbers">${court.pricePerHour}</span>
               </div>
               <div className="border-t border-white/10 pt-4 mt-4">
-                <div className="flex justify-between text-xl font-display font-bold">
-                  <span className="text-text-primary">Total:</span>
-                  <span className="text-primary">${totalPrice}</span>
+                <div className="flex justify-between text-xl font-display font-black">
+                  <span className="text-white">Total:</span>
+                  <span className="text-white numbers">${totalPrice}</span>
                 </div>
               </div>
             </div>
@@ -342,7 +342,6 @@ export default function BookingPage() {
               variant="primary"
               onClick={handleBooking}
               disabled={isLoading || selectedSlots.length === 0 || !selectedDate}
-              className="shadow-smooth"
             >
               {isLoading ? (
                 <span className="flex items-center justify-center gap-2">

@@ -9,6 +9,7 @@ import Button from "@/components/Button";
 import Badge from "@/components/Badge";
 import LoadingSpinner from "@/components/LoadingSpinner";
 import { Calendar, Clock, MapPin, ArrowRight, ExternalLink } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 export default function MyBookingsSection() {
   const router = useRouter();
@@ -25,10 +26,32 @@ export default function MyBookingsSection() {
       setError(null);
       setLoading(true);
       
+      // Check if user is authenticated before making the request
+      // This prevents unnecessary 401 console errors
+      const supabase = createClient();
+      let isAuthenticated = false;
+      
+      if (supabase) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          isAuthenticated = !!session;
+        } catch {
+          // Supabase not configured or error checking session
+          isAuthenticated = false;
+        }
+      }
+      
+      // Only make request if user is authenticated
+      // Otherwise, silently skip (no 401 error in console)
+      if (!isAuthenticated) {
+        setBookings([]);
+        return;
+      }
+      
       const response = await fetch("/api/bookings/my");
       
       if (response.status === 401) {
-        // Not authenticated - don't show error, just show empty
+        // Not authenticated (session expired or invalid)
         setBookings([]);
         return;
       }
@@ -41,6 +64,7 @@ export default function MyBookingsSection() {
         setBookings([]);
       }
     } catch (error) {
+      // Network errors or other exceptions
       console.error("Error fetching bookings:", error);
       // Silent fail for home page
       setBookings([]);
@@ -80,16 +104,16 @@ export default function MyBookingsSection() {
     return (
       <div className="mb-16">
         <div className="mb-8">
-          <h2 className="text-4xl font-display font-bold text-text-primary mb-3 text-center">
+          <h2 className="text-4xl font-display font-black text-white mb-3 text-center tracking-tight">
             My Bookings
           </h2>
-          <p className="text-text-secondary text-center mb-8">
+          <p className="text-white/50 text-center mb-8 font-light tracking-wide">
             Your upcoming and past bookings
           </p>
         </div>
         <Card className="p-12 text-center" hover={false}>
           <LoadingSpinner size="md" className="mb-4" />
-          <p className="text-text-secondary">Loading your bookings...</p>
+          <p className="text-white/50 font-light">Loading your bookings...</p>
         </Card>
       </div>
     );
@@ -116,12 +140,12 @@ export default function MyBookingsSection() {
 
   return (
     <div className="mb-16">
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-10 flex items-center justify-between">
         <div>
-          <h2 className="text-4xl font-display font-bold text-text-primary mb-3">
+          <h2 className="text-4xl font-display font-black text-white mb-3 tracking-tight">
             My Bookings
           </h2>
-          <p className="text-text-secondary">
+          <p className="text-white/50 font-light tracking-wide">
             Your upcoming bookings
           </p>
         </div>
@@ -136,47 +160,53 @@ export default function MyBookingsSection() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {displayBookings.map((booking) => (
           <Card key={booking.id} className="p-6" hover={true}>
-            <div className="flex items-start justify-between mb-4">
+            <div className="flex items-start justify-between mb-5">
               <div className="flex-1">
-                <h3 className="text-lg font-display font-bold text-text-primary mb-1">
+                <h3 className="text-xl font-display font-bold text-white mb-2 tracking-tight">
                   {booking.courtId}
                 </h3>
-                <p className="text-sm text-text-secondary capitalize">
+                <p className="text-sm text-white/50 font-light capitalize">
                   {booking.sportId}
                 </p>
               </div>
-              <Badge variant="success" className="text-xs">
+              <Badge variant="success" className="text-xs bg-[#0C0C10]/80 backdrop-blur-sm border-white/20 text-white">
                 Confirmed
               </Badge>
             </div>
 
-            <div className="space-y-3 mb-4">
-              <div className="flex items-center gap-2 text-sm text-text-secondary">
-                <Calendar className="w-4 h-4 flex-shrink-0" />
+            <div className="space-y-3 mb-5">
+              <div className="flex items-center gap-3 text-sm text-white/70">
+                <div className="w-9 h-9 rounded-xl bg-[#0C0C10] border border-white/10 flex items-center justify-center flex-shrink-0">
+                  <Calendar className="w-4 h-4 text-white/90" />
+                </div>
                 <span className="font-medium">{formatDate(booking.date)}</span>
               </div>
               
-              <div className="flex items-start gap-2 text-sm text-text-secondary">
-                <Clock className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <div className="flex flex-wrap gap-1">
+              <div className="flex items-start gap-3 text-sm text-white/70">
+                <div className="w-9 h-9 rounded-xl bg-[#0C0C10] border border-white/10 flex items-center justify-center flex-shrink-0">
+                  <Clock className="w-4 h-4 text-white/90" />
+                </div>
+                <div className="flex flex-wrap gap-2">
                   {booking.timeSlots.map((slot) => (
-                    <Badge key={slot} variant="info" className="text-xs">
+                    <Badge key={slot} variant="info" className="text-xs bg-[#0C0C10]/80 backdrop-blur-sm border-white/20 text-white">
                       {slot}
                     </Badge>
                   ))}
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 text-xs text-text-secondary">
-                <MapPin className="w-3 h-3 flex-shrink-0" />
-                <span className="truncate">ID: {booking.id.slice(0, 8)}...</span>
+              <div className="flex items-center gap-3 text-xs text-white/40">
+                <div className="w-9 h-9 rounded-xl bg-[#0C0C10] border border-white/10 flex items-center justify-center flex-shrink-0">
+                  <MapPin className="w-3 h-3 text-white/60" />
+                </div>
+                <span className="truncate font-light">ID: {booking.id.slice(0, 8)}...</span>
               </div>
             </div>
 
-            <div className="border-t border-white/10 pt-4 mt-4 flex items-center justify-between">
+            <div className="border-t border-white/10 pt-5 mt-5 flex items-center justify-between">
               <div>
-                <p className="text-xs text-text-secondary">Total</p>
-                <p className="text-lg font-bold text-text-primary">
+                <p className="text-xs text-white/50 font-light mb-1 tracking-wide">Total</p>
+                <p className="text-xl font-display font-black text-white numbers">
                   {formatCurrency(booking.totalPrice)}
                 </p>
               </div>
@@ -192,7 +222,7 @@ export default function MyBookingsSection() {
       </div>
 
       {upcomingBookings.length > 3 && (
-        <div className="mt-6 text-center">
+        <div className="mt-8 text-center">
           <Link href="/bookings/my">
             <Button variant="outline">
               View All {upcomingBookings.length} Bookings

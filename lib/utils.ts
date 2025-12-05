@@ -106,3 +106,54 @@ export function cn(...classes: (string | undefined | null | false)[]): string {
   return classes.filter(Boolean).join(" ");
 }
 
+/**
+ * Silent fetch that suppresses 401 console errors
+ * Useful for optional authenticated endpoints where 401 is expected
+ */
+export async function silentFetch(
+  url: string,
+  options?: RequestInit
+): Promise<Response> {
+  // Temporarily override console.error to suppress 401 logs
+  const originalError = console.error;
+  const originalWarn = console.warn;
+  
+  let suppressed = false;
+  
+  // Override console methods to filter out 401 errors
+  console.error = (...args: any[]) => {
+    const message = args.join(" ");
+    // Suppress 401 Unauthorized console errors
+    if (message.includes("401") && message.includes("Unauthorized")) {
+      suppressed = true;
+      return; // Don't log this error
+    }
+    originalError.apply(console, args);
+  };
+  
+  console.warn = (...args: any[]) => {
+    const message = args.join(" ");
+    // Suppress 401 warnings
+    if (message.includes("401") && message.includes("Unauthorized")) {
+      suppressed = true;
+      return;
+    }
+    originalWarn.apply(console, args);
+  };
+  
+  try {
+    const response = await fetch(url, options);
+    
+    // Restore console methods
+    console.error = originalError;
+    console.warn = originalWarn;
+    
+    return response;
+  } catch (error) {
+    // Restore console methods on error
+    console.error = originalError;
+    console.warn = originalWarn;
+    throw error;
+  }
+}
+
