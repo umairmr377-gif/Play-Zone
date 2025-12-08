@@ -1,4 +1,4 @@
-import { getServerClient } from "./supabaseServer";
+import { createServiceRoleClient } from "./supabase/server";
 import {
   getAllSports as getAllSportsLib,
   getSportByIdServer,
@@ -19,7 +19,7 @@ import { getBookings, updateBookingStatus as updateBookingStatusLib } from "./bo
  * Returns mock stats if Supabase is not configured
  */
 export async function getAdminStats() {
-  const client = getServerClient();
+  const client = createServiceRoleClient();
 
   // Fallback to mock stats if Supabase is not configured
   if (!client) {
@@ -66,13 +66,13 @@ export async function getAllSports() {
  * Returns mock data if Supabase is not configured
  */
 export async function getAllSportsRaw() {
-  const client = getServerClient();
+  const client = createServiceRoleClient();
   
   // Fallback to mock data if Supabase is not configured
   if (!client) {
     const { sports } = await import("@/data/sports");
-    return sports.map((s, index) => ({
-      id: index + 1,
+    return sports.map((s) => ({
+      id: s.id, // UUID string
       name: s.name,
       description: s.description,
       image: s.image,
@@ -80,7 +80,7 @@ export async function getAllSportsRaw() {
     }));
   }
 
-  const { data, error } = await (client as any).from("sports").select("*").order("id");
+  const { data, error } = await (client as any).from("sports").select("*").order("created_at", { ascending: false });
 
   if (error) {
     throw new Error(`Error fetching sports: ${error.message}`);
@@ -91,13 +91,10 @@ export async function getAllSportsRaw() {
 
 /**
  * Get sport by ID (server-side, for admin)
+ * Accepts UUID string
  */
 export async function getSportById(id: string) {
-  const numericId = parseInt(id);
-  if (isNaN(numericId)) {
-    return null;
-  }
-  return getSportByIdServer(numericId);
+  return getSportByIdServer(id);
 }
 
 /**
@@ -113,6 +110,7 @@ export async function createSport(sportData: {
 
 /**
  * Update a sport
+ * Accepts UUID string
  */
 export async function updateSport(
   id: string,
@@ -122,26 +120,20 @@ export async function updateSport(
     image?: string;
   }
 ) {
-  const numericId = parseInt(id);
-  if (isNaN(numericId)) {
-    throw new Error("Invalid sport ID");
-  }
-  return updateSportServer(numericId, updates);
+  return updateSportServer(id, updates);
 }
 
 /**
  * Delete a sport
+ * Accepts UUID string
  */
 export async function deleteSport(id: string) {
-  const numericId = parseInt(id);
-  if (isNaN(numericId)) {
-    throw new Error("Invalid sport ID");
-  }
-  return deleteSportServer(numericId);
+  return deleteSportServer(id);
 }
 
 /**
  * Create a court for a sport
+ * Accepts UUID string for sportId
  */
 export async function createCourt(
   sportId: string,
@@ -153,15 +145,12 @@ export async function createCourt(
     availableTimeSlots: string[];
   }
 ) {
-  const numericSportId = parseInt(sportId);
-  if (isNaN(numericSportId)) {
-    throw new Error("Invalid sport ID");
-  }
-  return createCourtServer(numericSportId, courtData);
+  return createCourtServer(sportId, courtData);
 }
 
 /**
  * Update a court
+ * Accepts UUID strings for sportId and courtId
  */
 export async function updateCourt(
   sportId: string,
@@ -174,22 +163,15 @@ export async function updateCourt(
     availableTimeSlots?: string[];
   }
 ) {
-  const numericCourtId = parseInt(courtId);
-  if (isNaN(numericCourtId)) {
-    throw new Error("Invalid court ID");
-  }
-  return updateCourtServer(numericCourtId, updates);
+  return updateCourtServer(courtId, updates);
 }
 
 /**
  * Delete a court
+ * Accepts UUID strings for sportId and courtId
  */
 export async function deleteCourt(sportId: string, courtId: string) {
-  const numericCourtId = parseInt(courtId);
-  if (isNaN(numericCourtId)) {
-    throw new Error("Invalid court ID");
-  }
-  return deleteCourtServer(numericCourtId);
+  return deleteCourtServer(courtId);
 }
 
 /**

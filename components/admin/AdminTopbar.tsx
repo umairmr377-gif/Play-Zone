@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Menu, LogOut } from "lucide-react";
-import { getPublicClient } from "@/lib/supabaseClient";
+import { getPublicClient } from "@/lib/supabase-client-helper";
 import Button from "../ui/Button";
 
 interface AdminTopbarProps {

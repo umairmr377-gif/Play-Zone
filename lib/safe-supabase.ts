@@ -1,19 +1,12 @@
 /**
- * Safe Supabase client helpers
+ * Safe Supabase client helpers (server-safe)
  * Returns null when Supabase is not configured, preventing null errors
+ * This file can be safely imported in both server and client components
+ * For client-side Supabase client, use lib/supabase-client-helper.ts instead
  */
 
-import { getPublicClient } from "./supabaseClient";
 import { getServerClient, createServerComponentClient } from "./supabaseServer";
 import { SupabaseClient } from "@supabase/supabase-js";
-
-/**
- * Get public Supabase client or null (client-side safe)
- * Returns null if Supabase is not configured
- */
-export function getSupabaseClientOrNull(): SupabaseClient | null {
-  return getPublicClient();
-}
 
 /**
  * Get server Supabase client or null (server-side safe)

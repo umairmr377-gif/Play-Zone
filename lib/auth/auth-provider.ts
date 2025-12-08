@@ -2,10 +2,40 @@
  * Auth Provider Abstraction
  * Automatically switches between Supabase Auth and Local Auth
  * based on configuration
+ * 
+ * NOTE: This file uses client-side Supabase functions.
+ * For server-side auth, use functions from lib/auth.ts instead
  */
 
-import { getPublicClient } from "../supabaseClient";
 import { isSupabaseConfigured } from "../safe-supabase";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+// This function should only be called from client-side code
+// We use a lazy getter pattern to avoid bundling issues
+let _getPublicClient: (() => SupabaseClient | null) | null = null;
+
+function getPublicClient(): SupabaseClient | null {
+  // Only load client-side module when actually needed (client-side only)
+  if (typeof window === 'undefined') {
+    // Server-side: return null (shouldn't be called anyway)
+    return null;
+  }
+  
+  // Lazy load the function on first call (client-side only)
+  if (!_getPublicClient) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const clientHelper = require("../supabase-client-helper");
+      _getPublicClient = clientHelper.getPublicClient;
+    } catch (err) {
+      // Module not available or error loading
+      console.warn("Failed to load Supabase client helper:", err);
+      return null;
+    }
+  }
+  
+  return _getPublicClient ? _getPublicClient() : null;
+}
 import {
   localSignUp,
   localSignIn,
@@ -129,7 +159,7 @@ function getSupabaseAuthProvider(): AuthProvider {
         return null;
       }
       
-      // Fetch profile for role
+      // Fetch profile for role (silently handle 404s)
       let profile = null;
       try {
         const { data, error } = await (supabase as any)
@@ -138,13 +168,38 @@ function getSupabaseAuthProvider(): AuthProvider {
           .eq("id", authUser.id)
           .single();
         
+        // Check if error is 404 or table missing (suppress these errors)
+        const isTableMissing = error && (
+          error.status === 404 ||
+          error.code === "PGRST116" ||
+          error.code === "42P01" ||
+          (error.message && (
+            error.message.includes("404") ||
+            error.message.includes("schema cache") ||
+            error.message.includes("relation") ||
+            error.message.includes("does not exist")
+          ))
+        );
+        
         // Only use profile if no error or error is not a 404/table missing
-        // PostgrestError doesn't have status property, only code
-        if (!error || (error.code !== "PGRST116" && error.code !== "42P01")) {
+        if (!isTableMissing && !error && data) {
           profile = data;
         }
-      } catch {
-        // Table doesn't exist - use defaults
+        // Silently ignore 404/table missing errors
+      } catch (error: any) {
+        // Silently handle table missing errors (404s) - don't log to console
+        const isTableMissing = error?.status === 404 || 
+          error?.message?.includes("404") ||
+          error?.code === "PGRST116" ||
+          error?.code === "42P01";
+        
+        // Silently ignore if table is missing
+        if (!isTableMissing) {
+          // Only log non-404 errors (but suppress in production)
+          if (process.env.NODE_ENV === 'development') {
+            console.warn("Profile fetch error:", error?.message);
+          }
+        }
       }
       
       return {

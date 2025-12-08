@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { getAllSports } from "@/lib/sports";
 
+// Force dynamic rendering for routes using cookies/sessions
+export const dynamic = "force-dynamic";
+
 // Force Node.js runtime for Supabase compatibility
 export const runtime = 'nodejs';
 

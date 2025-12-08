@@ -39,32 +39,57 @@ export async function getServerAuthSession(): Promise<AuthSession> {
       }
 
       // Get user profile with role
-      const { data: profile, error: profileError } = await (supabase as any)
-        .from("profiles")
-        .select("role, full_name")
-        .eq("id", authUser.id)
-        .single();
+      let profile = null;
+      try {
+        const { data, error: profileError } = await (supabase as any)
+          .from("profiles")
+          .select("role, full_name")
+          .eq("id", authUser.id)
+          .single();
 
-      // Check if error is due to missing table
-      const isTableMissing = profileError && (
-        profileError.status === 404 ||
-        profileError.code === "PGRST116" ||
-        profileError.code === "42P01" ||
-        profileError.message?.includes("schema cache") ||
-        profileError.message?.includes("relation") ||
-        profileError.message?.includes("does not exist")
-      );
+        // Check if error is due to missing table (404 or table not found)
+        const isTableMissing = profileError && (
+          profileError.status === 404 ||
+          profileError.code === "PGRST116" ||
+          profileError.code === "42P01" ||
+          (profileError.message && (
+            profileError.message.includes("schema cache") ||
+            profileError.message.includes("relation") ||
+            profileError.message.includes("does not exist") ||
+            profileError.message.includes("404")
+          ))
+        );
 
-      if (isTableMissing) {
-        // Table doesn't exist - return user with default role
-        // User needs to run database schema
-        return {
-          user: {
-            id: authUser.id,
-            email: authUser.email,
-            role: "user",
-          },
-        };
+        if (!isTableMissing && !profileError && data) {
+          profile = data;
+        } else if (isTableMissing) {
+          // Table doesn't exist - return user with default role (silently)
+          return {
+            user: {
+              id: authUser.id,
+              email: authUser.email,
+              role: "user",
+            },
+          };
+        }
+      } catch (error: any) {
+        // Silently handle table missing errors (404s)
+        const isTableMissing = error?.status === 404 || 
+          error?.message?.includes("404") ||
+          error?.code === "PGRST116" ||
+          error?.code === "42P01";
+        
+        if (isTableMissing) {
+          // Table doesn't exist - return user with default role
+          return {
+            user: {
+              id: authUser.id,
+              email: authUser.email,
+              role: "user",
+            },
+          };
+        }
+        // For other errors, continue with default role (don't throw)
       }
 
       if (profileError || !profile || typeof profile !== 'object' || !('role' in profile)) {

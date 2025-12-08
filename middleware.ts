@@ -80,7 +80,7 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(redirectUrl);
     }
 
-    // Check if user is admin
+    // Check if user is admin (silently handle 404s)
     let profile = null;
     try {
       const { data, error } = await supabase
@@ -89,13 +89,35 @@ export async function middleware(request: NextRequest) {
         .eq("id", session.user.id)
         .single();
       
+      // Check if error is 404 or table missing (suppress these errors)
+      const isTableMissing = error && (
+        error.status === 404 ||
+        error.code === "PGRST116" ||
+        error.code === "42P01" ||
+        (error.message && (
+          error.message.includes("404") ||
+          error.message.includes("schema cache") ||
+          error.message.includes("relation") ||
+          error.message.includes("does not exist")
+        ))
+      );
+      
       // Only use profile if no error or error is not a 404/table missing
-      // PostgrestError doesn't have status property, only code
-      if (!error || (error.code !== "PGRST116" && error.code !== "42P01")) {
+      if (!isTableMissing && !error && data) {
         profile = data;
       }
-    } catch {
-      // Table doesn't exist - use defaults (user role)
+      // Silently ignore 404/table missing errors
+    } catch (error: any) {
+      // Silently handle table missing errors (404s) - don't log to console
+      const isTableMissing = error?.status === 404 || 
+        error?.message?.includes("404") ||
+        error?.code === "PGRST116" ||
+        error?.code === "42P01";
+      
+      // Silently ignore if table is missing (default to user role)
+      if (!isTableMissing && process.env.NODE_ENV === 'development') {
+        console.warn("Profile fetch error in middleware:", error?.message);
+      }
     }
 
     const userRole = (profile?.role as "user" | "admin") || "user";

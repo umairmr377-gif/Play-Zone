@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { getAdminStats } from "@/lib/admin";
 
+// Force dynamic rendering for routes using cookies/sessions
+export const dynamic = "force-dynamic";
+
 // Force Node.js runtime for Supabase compatibility
 export const runtime = 'nodejs';
 

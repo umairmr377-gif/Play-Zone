@@ -4,6 +4,9 @@ import { bookingRateLimiter } from "@/lib/rateLimit";
 import { logger } from "@/lib/logger";
 import { createRouteHandlerClient } from "@/lib/supabase/server";
 
+// Force dynamic rendering for routes using cookies/sessions
+export const dynamic = "force-dynamic";
+
 // Force Node.js runtime for Supabase compatibility
 export const runtime = 'nodejs';
 

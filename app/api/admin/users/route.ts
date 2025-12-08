@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, getUserProfile, updateUserRole } from "@/lib/auth";
-import { getServerClient } from "@/lib/supabaseServer";
+import { createServiceRoleClient } from "@/lib/supabase/server";
 import { getAuthProvider } from "@/lib/auth/auth-provider";
 import { isSupabaseConfigured } from "@/lib/safe-supabase";
 import { logAdminMutation } from "@/lib/audit";
 import { logger } from "@/lib/logger";
+
+// Force dynamic rendering for routes using cookies/sessions
+export const dynamic = "force-dynamic";
 
 // Force Node.js runtime for Supabase and process.env compatibility
 export const runtime = 'nodejs';
@@ -16,7 +19,7 @@ export async function GET(request: NextRequest) {
     const useSupabase = isSupabaseConfigured();
     
     if (useSupabase) {
-      const client = getServerClient();
+      const client = createServiceRoleClient();
       if (!client) {
         return NextResponse.json({ users: [] });
       }
@@ -134,7 +137,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const client = getServerClient();
+    const client = createServiceRoleClient();
     
     if (!client) {
       return NextResponse.json(

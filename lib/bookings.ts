@@ -1,11 +1,29 @@
-import { getPublicClient } from "./supabaseClient";
-import { getServerClient } from "./supabaseServer";
+/* lib/bookings.ts — Safe version matching your bookings table:
+   Columns used: booking_date (date), time_slots (text[]),
+   price_per_hour (integer), total_price (integer), created_at, status, user_id, customer_name, customer_email
+*/
+
+import { createServerComponentClient, createRouteHandlerClient, createServiceRoleClient } from "./supabase/server";
 import { isUniqueConstraintError } from "./db";
 import { Booking } from "@/data/types";
 
+/** Utility: check if two arrays of time-slot strings overlap */
+function slotsOverlap(a: string[], b: string[]) {
+  const set = new Set(a);
+  return b.some((s) => set.has(s));
+}
+
+/** Normalize time slots (pad HH:MM) */
+function normalizeSlots(slots: string[]) {
+  return slots.map(s => {
+    const [h, m] = s.split(":").map(Number);
+    return `${String(h).padStart(2,'0')}:${String(m ?? 0).padStart(2,'0')}`;
+  }).sort();
+}
+
 /**
- * Get bookings with optional filters (client-safe)
- * Falls back to empty array if Supabase is not configured
+ * Get bookings with optional filters
+ * Uses service role client (admin) to read bookings across users
  */
 export async function getBookings(filters?: {
   sportId?: string;
@@ -16,531 +34,281 @@ export async function getBookings(filters?: {
   userId?: string;
   search?: string;
 }): Promise<Booking[]> {
-  const client = getPublicClient();
-  
-  // Fallback to empty array if Supabase is not configured
-  if (!client) {
-    return [];
-  }
+  const client = createServiceRoleClient();
+  if (!client) return [];
 
-  // Build query with joins to get sport and court names
-  let query = (client as any)
-    .from("bookings")
-    .select(`
-      *,
-      courts!inner(
-        id,
-        name,
-        sport_id,
-        sports!inner(
-          id,
-          name
-        )
-      )
-    `);
+  try {
+    let query: any = (client as any).from("bookings").select("*");
 
-  if (filters?.sportId) {
-    query = query.eq("courts.sport_id", filters.sportId);
-  }
-  if (filters?.courtId) {
-    query = query.eq("court_id", filters.courtId);
-  }
-  if (filters?.date) {
-    query = query.eq("date", filters.date);
-  }
-  if (filters?.userId) {
-    query = query.eq("user_id", filters.userId);
-  }
-
-  const { data, error } = await query.order("created_at", { ascending: false });
-
-  if (error) {
-    throw new Error(`Error fetching bookings: ${error.message}`);
-  }
-
-  // Convert database format to application format
-  let bookings = (data || []).map((booking: any) => {
-    // Convert start_time and end_time to timeSlots array
-    const timeSlots: string[] = [];
-    if (booking.start_time && booking.end_time) {
-      const start = new Date(`2000-01-01T${booking.start_time}`);
-      const end = new Date(`2000-01-01T${booking.end_time}`);
-      const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-      
-      for (let i = 0; i < durationHours; i++) {
-        const slotTime = new Date(start.getTime() + i * 60 * 60 * 1000);
-        const hours = String(slotTime.getHours()).padStart(2, '0');
-        const minutes = String(slotTime.getMinutes()).padStart(2, '0');
-        timeSlots.push(`${hours}:${minutes}`);
-      }
+    if (filters?.courtId) query = query.eq("court", filters.courtId);
+    if (filters?.courtName) query = query.eq("court", filters.courtName);
+    if (filters?.date) query = query.eq("booking_date", filters.date);
+    if (filters?.userId) query = query.eq("user_id", filters.userId);
+    if (filters?.search) {
+      // search customer_name / customer_email
+      query = query.or(`customer_name.ilike.%${filters.search}%,customer_email.ilike.%${filters.search}%`);
     }
 
-    return {
-      id: booking.id.toString(),
-      sportId: booking.courts?.sports?.name || booking.courts?.sport_id || "",
-      courtId: booking.courts?.name || booking.court_id || "",
-      date: booking.date,
-      timeSlots: timeSlots,
-      customerName: booking.customer_name || "",
-      customerEmail: booking.customer_email || "",
-      totalPrice: Number(booking.price) || 0,
-      createdAt: booking.created_at,
-      status: booking.status || "confirmed",
-    };
-  });
+    const { data, error } = await query.order("created_at", { ascending: false });
 
-  // Client-side search filter
-  if (filters?.search) {
-    const searchLower = filters.search.toLowerCase();
-    bookings = bookings.filter(
-      (b: Booking) =>
-        b.id.toLowerCase().includes(searchLower) ||
-        b.customerName.toLowerCase().includes(searchLower)
-    );
+    if (error) {
+      // Table might not exist yet
+      if (error.code === "42P01" || (error.message || "").includes("does not exist")) {
+        return [];
+      }
+      throw new Error(`Error fetching bookings: ${error.message}`);
+    }
+
+    const rows = data || [];
+    return rows.map((r: any) => ({
+      id: r.id?.toString(),
+      sportId: r.sport || "",
+      courtId: r.court || "",
+      date: r.booking_date,
+      timeSlots: Array.isArray(r.time_slots) ? r.time_slots : [],
+      customerName: r.customer_name || "",
+      customerEmail: r.customer_email || "",
+      totalPrice: Number(r.total_price ?? r.totalPrice ?? 0),
+      createdAt: r.created_at,
+      status: r.status || "confirmed",
+    }));
+  } catch (err: any) {
+    console.error("getBookings error:", err?.message || err);
+    throw err;
   }
-
-  return bookings;
 }
 
 /**
- * Get booked time slots for a specific court and date
- * Falls back to empty array if Supabase is not configured or table doesn't exist
+ * Get booked slots for a court on a date.
+ * Returns an array of time-slot strings (e.g., ["18:00","19:00"])
  */
 export async function getBookedSlots(
   courtId: string,
   date: string,
   courtName?: string
 ): Promise<string[]> {
-  const client = getPublicClient();
-
-  // Fallback to empty array if Supabase is not configured
-  if (!client) {
-    return [];
+  // Use server client where possible
+  let client;
+  try {
+    client = await createServerComponentClient();
+  } catch {
+    // Fallback to route handler client (server route)
+    try {
+      client = await createRouteHandlerClient();
+    } catch {
+      return [];
+    }
   }
+  if (!client) return [];
 
   try {
-    // Use court_id (UUID) if available, otherwise try to find by name
-    let query = (client as any)
-      .from("bookings")
-      .select("start_time, end_time")
-      .eq("date", date);
-
-    // Try to match by court_id (UUID) first
-    if (courtId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(courtId)) {
-      query = query.eq("court_id", courtId);
-    } else {
-      // If not a UUID, try to find court by name via join
-      query = query.eq("courts.name", courtName || courtId);
-    }
+    const courtToUse = courtName || courtId;
+    let query: any = (client as any).from("bookings").select("time_slots").eq("booking_date", date);
+    if (courtToUse) query = query.eq("court", courtToUse);
 
     const { data, error } = await query;
 
-    // Check if error is due to missing table
     if (error) {
-      const errorMessage = error.message || "";
-      if (
-        errorMessage.includes("schema cache") ||
-        errorMessage.includes("relation") ||
-        errorMessage.includes("does not exist") ||
-        error.code === "42P01" ||
-        error.code === "PGRST116"
-      ) {
-        // Table doesn't exist yet - return empty array (no bookings)
-        console.warn("Bookings table not found, returning empty slots. Run supabase/schema.sql to create tables.");
+      const msg = error.message || "";
+      if (msg.includes("does not exist") || error.code === "42P01" || error.code === "PGRST116") {
+        // bookings table not present yet
         return [];
       }
       throw new Error(`Error fetching booked slots: ${error.message}`);
     }
 
-    // Convert start_time and end_time to timeSlots array
-    const allSlots: string[] = [];
-    (data || []).forEach((booking: any) => {
-      if (booking.start_time && booking.end_time) {
-        const start = new Date(`2000-01-01T${booking.start_time}`);
-        const end = new Date(`2000-01-01T${booking.end_time}`);
-        const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-        
-        for (let i = 0; i < durationHours; i++) {
-          const slotTime = new Date(start.getTime() + i * 60 * 60 * 1000);
-          const hours = String(slotTime.getHours()).padStart(2, '0');
-          const minutes = String(slotTime.getMinutes()).padStart(2, '0');
-          allSlots.push(`${hours}:${minutes}`);
-        }
+    const slots: string[] = [];
+    (data || []).forEach((row: any) => {
+      if (Array.isArray(row.time_slots)) {
+        row.time_slots.forEach((s: any) => {
+          if (s) slots.push(String(s));
+        });
       }
     });
 
-    return allSlots;
-  } catch (error: any) {
-    // If any other error occurs, return empty array (no bookings)
-    console.warn("Error fetching booked slots, returning empty:", error.message);
+    // Normalize & dedupe
+    return Array.from(new Set(normalizeSlots(slots)));
+  } catch (err: any) {
+    console.warn("getBookedSlots error:", err?.message || err);
     return [];
   }
 }
 
 /**
- * Create a booking (server-side, with conflict prevention)
- * Throws error if Supabase is not configured
+ * Create booking — stores booking_date and time_slots array (presentation-only formatting elsewhere).
+ * This function prevents overlap by checking existing bookings for same court/date.
  */
 export async function createBooking(params: {
   sportName: string;
   courtName: string;
-  date: string;
-  timeSlots: string[];
+  date: string; // booking_date
+  timeSlots: string[]; // array of "HH:MM"
   pricePerHour: number;
   totalPrice: number;
   userId?: string;
   customerName?: string;
   customerEmail?: string;
 }): Promise<Booking> {
-  const client = getServerClient();
-  
-  if (!client) {
-    throw new Error("Database is not configured. Please set up Supabase to create bookings.");
+  const client = createServiceRoleClient();
+  if (!client) throw new Error("Database is not configured");
+
+  if (!params.courtName || !params.date || !params.timeSlots || params.timeSlots.length === 0) {
+    throw new Error("Missing required booking fields");
   }
 
-  // First, find the court_id by name (or use courtName if it's already a UUID)
-  let courtId: string;
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.courtName)) {
-    // Already a UUID
-    courtId = params.courtName;
-  } else {
-    // Find court by name
-    const { data: courtData, error: courtError } = await (client as any)
-      .from("courts")
-      .select("id")
-      .eq("name", params.courtName)
-      .single();
+  const normalizedRequested = normalizeSlots(params.timeSlots);
 
-    if (courtError || !courtData) {
-      throw new Error(`Court "${params.courtName}" not found in database.`);
-    }
-    courtId = courtData.id;
-  }
-
-  // Convert timeSlots array to start_time and end_time
-  if (params.timeSlots.length === 0) {
-    throw new Error("At least one time slot is required.");
-  }
-
-  // Sort time slots and ensure they're consecutive
-  const sortedSlots = [...params.timeSlots].sort();
-  const startTime = sortedSlots[0];
-  
-  // Calculate end time (last slot + 1 hour)
-  const lastSlot = sortedSlots[sortedSlots.length - 1];
-  const [lastHours, lastMinutes] = lastSlot.split(':').map(Number);
-  const endHours = String((lastHours + 1) % 24).padStart(2, '0');
-  const endTime = `${endHours}:${String(lastMinutes).padStart(2, '0')}`;
-
-  // Check for conflicts with existing bookings
-  const { data: existingBookings, error: conflictError } = await (client as any)
+  // Fetch existing bookings for same court & date
+  const { data: existing, error: existingErr } = await (client as any)
     .from("bookings")
-    .select("start_time, end_time")
-    .eq("court_id", courtId)
-    .eq("date", params.date);
+    .select("time_slots")
+    .eq("court", params.courtName)
+    .eq("booking_date", params.date);
 
-  if (conflictError && !conflictError.message.includes("does not exist")) {
-    throw new Error(`Error checking for conflicts: ${conflictError.message}`);
+  if (existingErr && !(existingErr.message || "").includes("does not exist")) {
+    throw new Error(`Error checking existing bookings: ${existingErr.message}`);
   }
 
-  if (existingBookings && existingBookings.length > 0) {
-    const requestedStart = new Date(`2000-01-01T${startTime}`);
-    const requestedEnd = new Date(`2000-01-01T${endTime}`);
-
-    for (const booking of existingBookings) {
-      const existingStart = new Date(`2000-01-01T${booking.start_time}`);
-      const existingEnd = new Date(`2000-01-01T${booking.end_time}`);
-
-      // Check for overlap
-      if (
-        (requestedStart >= existingStart && requestedStart < existingEnd) ||
-        (requestedEnd > existingStart && requestedEnd <= existingEnd) ||
-        (requestedStart <= existingStart && requestedEnd >= existingEnd)
-      ) {
-        throw new Error(
-          `Time slot(s) ${params.timeSlots.join(", ")} conflict with an existing booking. Please select another time slot.`
-        );
+  if (existing && existing.length > 0) {
+    for (const eb of existing) {
+      const existingSlots: string[] = Array.isArray(eb.time_slots) ? eb.time_slots.map(String) : [];
+      if (slotsOverlap(existingSlots, normalizedRequested)) {
+        throw new Error(`Time slot(s) conflict with existing booking: ${normalizedRequested.join(", ")}`);
       }
     }
   }
 
-  // Insert booking with correct schema fields
-  const insertData: any = {
-    court_id: courtId,
-    date: params.date,
-    start_time: startTime,
-    end_time: endTime,
-    price: Math.round(params.totalPrice * 100) / 100, // Round to 2 decimal places
+  // Prepare insert payload matching your schema
+  const insertPayload: any = {
+    sport: params.sportName || "",
+    court: params.courtName,
+    booking_date: params.date,
+    time_slots: normalizedRequested,
+    price_per_hour: Math.round(params.pricePerHour),
+    total_price: Math.round(params.totalPrice),
     status: "confirmed",
   };
-  
-  // Only add user_id if provided (not null or undefined)
-  if (params.userId) {
-    insertData.user_id = params.userId;
-  }
 
-  // Add customer info if provided
-  if (params.customerName) {
-    insertData.customer_name = params.customerName;
-  }
-  if (params.customerEmail) {
-    insertData.customer_email = params.customerEmail;
-  }
-  
-  const { data, error } = await (client as any)
+  if (params.userId) insertPayload.user_id = params.userId;
+  if (params.customerName) insertPayload.customer_name = params.customerName;
+  if (params.customerEmail) insertPayload.customer_email = params.customerEmail;
+
+  const { data: inserted, error: insertErr } = await (client as any)
     .from("bookings")
-    .insert(insertData)
-    .select(`
-      *,
-      courts!inner(
-        id,
-        name,
-        sport_id,
-        sports!inner(
-          id,
-          name
-        )
-      )
-    `)
+    .insert(insertPayload)
+    .select("*")
     .single();
-  
-  // Log for debugging
-  if (params.userId) {
-    console.log("✅ Booking created with user_id:", params.userId);
-  } else {
-    console.log("⚠️ Booking created without user_id");
-  }
 
-  if (error) {
-    // Handle unique constraint violation
-    if (isUniqueConstraintError(error)) {
-      throw new Error("This booking conflicts with an existing booking. Please select another time slot.");
+  if (insertErr) {
+    if (isUniqueConstraintError(insertErr)) {
+      throw new Error("This booking conflicts with an existing booking. Please choose different slots.");
     }
-    throw new Error(`Error creating booking: ${error.message}`);
+    throw new Error(`Error creating booking: ${insertErr.message}`);
   }
 
-  // Convert back to application format
-  const timeSlots: string[] = [];
-  if (data.start_time && data.end_time) {
-    const start = new Date(`2000-01-01T${data.start_time}`);
-    const end = new Date(`2000-01-01T${data.end_time}`);
-    const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-    
-    for (let i = 0; i < durationHours; i++) {
-      const slotTime = new Date(start.getTime() + i * 60 * 60 * 1000);
-      const hours = String(slotTime.getHours()).padStart(2, '0');
-      const minutes = String(slotTime.getMinutes()).padStart(2, '0');
-      timeSlots.push(`${hours}:${minutes}`);
-    }
-  }
-
+  // Build Booking response object
   return {
-    id: data.id.toString(),
-    sportId: data.courts?.sports?.name || "",
-    courtId: data.courts?.name || "",
-    date: data.date,
-    timeSlots: timeSlots,
-    customerName: data.customer_name || "",
-    customerEmail: data.customer_email || "",
-    totalPrice: Number(data.price) || 0,
-    createdAt: data.created_at,
-    status: data.status || "confirmed",
+    id: inserted.id?.toString(),
+    sportId: inserted.sport || "",
+    courtId: inserted.court || "",
+    date: inserted.booking_date,
+    timeSlots: Array.isArray(inserted.time_slots) ? inserted.time_slots : normalizedRequested,
+    customerName: inserted.customer_name || "",
+    customerEmail: inserted.customer_email || "",
+    totalPrice: Number(inserted.total_price ?? 0),
+    createdAt: inserted.created_at,
+    status: inserted.status || "confirmed",
   };
 }
 
-/**
- * Get booking by ID (client-safe)
- * Returns null if Supabase is not configured
- */
+/** Get booking by ID */
 export async function getBookingById(id: string): Promise<Booking | null> {
-  const client = getPublicClient();
-  
-  // Return null if Supabase is not configured
-  if (!client) {
-    return null;
+  let client;
+  try {
+    client = await createServerComponentClient();
+  } catch {
+    client = await createRouteHandlerClient().catch(() => null);
   }
+  if (!client) return null;
 
-  const { data, error } = await (client as any)
-    .from("bookings")
-    .select("*")
-    .eq("id", id) // UUID - don't parse as integer
-    .single();
-
+  const { data, error } = await (client as any).from("bookings").select("*").eq("id", id).single();
   if (error) {
-    if (error.code === "PGRST116") {
-      return null;
-    }
+    if (error.code === "42P01" || (error.message || "").includes("does not exist")) return null;
     throw new Error(`Error fetching booking: ${error.message}`);
   }
-
-  // Convert start_time and end_time to timeSlots array
-  const timeSlots: string[] = [];
-  if (data.start_time && data.end_time) {
-    const start = new Date(`2000-01-01T${data.start_time}`);
-    const end = new Date(`2000-01-01T${data.end_time}`);
-    const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-    
-    for (let i = 0; i < durationHours; i++) {
-      const slotTime = new Date(start.getTime() + i * 60 * 60 * 1000);
-      const hours = String(slotTime.getHours()).padStart(2, '0');
-      const minutes = String(slotTime.getMinutes()).padStart(2, '0');
-      timeSlots.push(`${hours}:${minutes}`);
-    }
-  }
+  if (!data) return null;
 
   return {
-    id: data.id.toString(),
-    sportId: data.courts?.sports?.name || "",
-    courtId: data.courts?.name || "",
-    date: data.date,
-    timeSlots: timeSlots,
+    id: data.id?.toString(),
+    sportId: data.sport || "",
+    courtId: data.court || "",
+    date: data.booking_date,
+    timeSlots: Array.isArray(data.time_slots) ? data.time_slots : [],
     customerName: data.customer_name || "",
     customerEmail: data.customer_email || "",
-    totalPrice: Number(data.price) || 0,
+    totalPrice: Number(data.total_price ?? 0),
     createdAt: data.created_at,
     status: data.status || "confirmed",
   };
 }
 
-/**
- * Update booking (server-side only, admin)
- * Note: Status field doesn't exist in schema, so this function is limited
- */
+/** Update booking (admin) */
 export async function updateBooking(bookingId: string, updates: {
   timeSlots?: string[];
   pricePerHour?: number;
   totalPrice?: number;
 }) {
-  const client = getServerClient();
-  
+  const client = createServiceRoleClient();
+  if (!client) throw new Error("Database not configured");
+
   const updateData: any = {};
-  
-  // Convert timeSlots array to start_time and end_time if provided
   if (updates.timeSlots && updates.timeSlots.length > 0) {
-    const sortedSlots = [...updates.timeSlots].sort();
-    const startTime = sortedSlots[0];
-    const lastSlot = sortedSlots[sortedSlots.length - 1];
-    const [lastHours, lastMinutes] = lastSlot.split(':').map(Number);
-    const endHours = String((lastHours + 1) % 24).padStart(2, '0');
-    const endTime = `${endHours}:${String(lastMinutes).padStart(2, '0')}`;
-    updateData.start_time = startTime;
-    updateData.end_time = endTime;
+    updateData.time_slots = normalizeSlots(updates.timeSlots);
   }
-  
+  if (updates.pricePerHour !== undefined) {
+    updateData.price_per_hour = Math.round(updates.pricePerHour);
+  }
   if (updates.totalPrice !== undefined) {
-    updateData.price = Math.round(updates.totalPrice * 100) / 100;
+    updateData.total_price = Math.round(updates.totalPrice);
   }
 
-  const { data, error } = await (client as any)
-    .from("bookings")
-    .update(updateData)
-    .eq("id", bookingId)
-    .select(`
-      *,
-      courts!inner(
-        id,
-        name,
-        sport_id,
-        sports!inner(
-          id,
-          name
-        )
-      )
-    `)
-    .single();
-
-  if (error) {
-    throw new Error(`Error updating booking: ${error.message}`);
-  }
-
-  // Convert start_time and end_time to timeSlots array
-  const timeSlots: string[] = [];
-  if (data.start_time && data.end_time) {
-    const start = new Date(`2000-01-01T${data.start_time}`);
-    const end = new Date(`2000-01-01T${data.end_time}`);
-    const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-    
-    for (let i = 0; i < durationHours; i++) {
-      const slotTime = new Date(start.getTime() + i * 60 * 60 * 1000);
-      const hours = String(slotTime.getHours()).padStart(2, '0');
-      const minutes = String(slotTime.getMinutes()).padStart(2, '0');
-      timeSlots.push(`${hours}:${minutes}`);
-    }
-  }
+  const { data, error } = await (client as any).from("bookings").update(updateData).eq("id", bookingId).select("*").single();
+  if (error) throw new Error(`Error updating booking: ${error.message}`);
 
   return {
-    id: data.id.toString(),
-    sportId: data.courts?.sports?.name || "",
-    courtId: data.courts?.name || "",
-    date: data.date,
-    timeSlots: timeSlots,
+    id: data.id?.toString(),
+    sportId: data.sport || "",
+    courtId: data.court || "",
+    date: data.booking_date,
+    timeSlots: Array.isArray(data.time_slots) ? data.time_slots : [],
     customerName: data.customer_name || "",
     customerEmail: data.customer_email || "",
-    totalPrice: Number(data.price) || 0,
+    totalPrice: Number(data.total_price ?? 0),
     createdAt: data.created_at,
     status: data.status || "confirmed",
   };
 }
 
-/**
- * Update booking status (server-side only, admin)
- */
+/** Update booking status (admin) */
 export async function updateBookingStatus(
   bookingId: string,
   status: "pending" | "confirmed" | "cancelled" | "completed"
 ): Promise<Booking> {
-  const client = getServerClient();
-  
-  if (!client) {
-    throw new Error("Database is not configured. Please set up Supabase to update bookings.");
-  }
+  const client = createServiceRoleClient();
+  if (!client) throw new Error("DB not configured");
 
-  const { data, error } = await (client as any)
-    .from("bookings")
-    .update({ status })
-    .eq("id", bookingId)
-    .select(`
-      *,
-      courts!inner(
-        id,
-        name,
-        sport_id,
-        sports!inner(
-          id,
-          name
-        )
-      )
-    `)
-    .single();
-
-  if (error) {
-    throw new Error(`Error updating booking status: ${error.message}`);
-  }
-
-  // Convert start_time and end_time to timeSlots array
-  const timeSlots: string[] = [];
-  if (data.start_time && data.end_time) {
-    const start = new Date(`2000-01-01T${data.start_time}`);
-    const end = new Date(`2000-01-01T${data.end_time}`);
-    const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-    
-    for (let i = 0; i < durationHours; i++) {
-      const slotTime = new Date(start.getTime() + i * 60 * 60 * 1000);
-      const hours = String(slotTime.getHours()).padStart(2, '0');
-      const minutes = String(slotTime.getMinutes()).padStart(2, '0');
-      timeSlots.push(`${hours}:${minutes}`);
-    }
-  }
+  const { data, error } = await (client as any).from("bookings").update({ status }).eq("id", bookingId).select("*").single();
+  if (error) throw new Error(`Error updating booking status: ${error.message}`);
 
   return {
-    id: data.id.toString(),
-    sportId: data.courts?.sports?.name || "",
-    courtId: data.courts?.name || "",
-    date: data.date,
-    timeSlots: timeSlots,
+    id: data.id?.toString(),
+    sportId: data.sport || "",
+    courtId: data.court || "",
+    date: data.booking_date,
+    timeSlots: Array.isArray(data.time_slots) ? data.time_slots : [],
     customerName: data.customer_name || "",
     customerEmail: data.customer_email || "",
-    totalPrice: Number(data.price) || 0,
+    totalPrice: Number(data.total_price ?? 0),
     createdAt: data.created_at,
     status: data.status || "confirmed",
   };

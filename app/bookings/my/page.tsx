@@ -58,21 +58,48 @@ export default function MyBookingsPage() {
     }
   };
 
-  const formatDate = (dateString: string) => {
-    const { toPKT } = require("@/lib/utils");
-    const pktDate = toPKT(dateString);
-    return pktDate.toLocaleDateString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      timeZone: "Asia/Karachi",
-    });
+  const formatDate = (dateString: string | undefined | null): string => {
+    // Safely handle undefined/null dates
+    if (!dateString) {
+      return "Date not available";
+    }
+    
+    try {
+      const { toPKT } = require("@/lib/utils");
+      const pktDate = toPKT(dateString);
+      
+      // Check if toPKT returned a valid date
+      if (!pktDate || !(pktDate instanceof Date) || isNaN(pktDate.getTime())) {
+        return "Invalid date";
+      }
+      
+      return pktDate.toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        timeZone: "Asia/Karachi",
+      });
+    } catch (error) {
+      // If date parsing fails, return a safe fallback
+      console.warn("Error formatting date:", error);
+      return "Date not available";
+    }
   };
 
-  const formatCurrency = (amount: number) => {
-    const { formatPKR } = require("@/lib/utils");
-    return formatPKR(amount);
+  const formatCurrency = (amount: number | undefined | null): string => {
+    // Safely handle undefined/null amounts
+    if (amount === undefined || amount === null || isNaN(amount)) {
+      return "PKR 0.00";
+    }
+    
+    try {
+      const { formatPKR } = require("@/lib/utils");
+      return formatPKR(amount);
+    } catch (error) {
+      console.warn("Error formatting currency:", error);
+      return `PKR ${amount.toFixed(2)}`;
+    }
   };
 
   if (loading) {
@@ -151,7 +178,9 @@ export default function MyBookingsPage() {
       </div>
 
       <div className="space-y-4">
-        {bookings.map((booking) => (
+        {bookings
+          .filter((booking) => booking && booking.id) // Filter out invalid bookings
+          .map((booking) => (
           <Card key={booking.id} className="p-6 md:p-8" hover={true}>
             <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
               <div className="flex-1">

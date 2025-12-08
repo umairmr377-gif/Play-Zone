@@ -1,5 +1,4 @@
-import { getPublicClient } from "./supabaseClient";
-import { getServerClient, createServerComponentClient } from "./supabaseServer";
+import { createServerComponentClient, createServiceRoleClient } from "./supabase/server";
 import { Sport, Court } from "@/data/types";
 import { sports as mockSports, getSportById as getMockSportById } from "@/data/sports";
 
@@ -13,8 +12,9 @@ export async function getAllSports(): Promise<Sport[]> {
   try {
     client = await createServerComponentClient();
   } catch {
-    // Fallback to public client if server client fails
-    client = getPublicClient();
+    // If server client fails, fall back to mock data
+    console.warn("Supabase not configured, using mock data");
+    return mockSports;
   }
 
   // Fallback to mock data if Supabase is not configured
@@ -74,14 +74,14 @@ export async function getAllSports(): Promise<Sport[]> {
       const courts: Court[] = (courtsData || [])
         .filter((court: any) => court.sport_id === sport.id)
         .map((court: any) => {
-          const extraInfo = court.extra_info as any;
+          // Schema uses image_url, not extra_info
           return {
             id: court.id.toString(),
             name: court.name,
-            pricePerHour: court.price_per_hour,
+            pricePerHour: Number(court.price_per_hour) || 0,
             location: court.location || "",
-            image: extraInfo?.image || undefined,
-            availableTimeSlots: extraInfo?.availableTimeSlots || [],
+            image: court.image_url || undefined,
+            availableTimeSlots: [], // Not stored in schema, would need to be added
           };
         });
 
@@ -103,31 +103,49 @@ export async function getAllSports(): Promise<Sport[]> {
 }
 
 /**
- * Get sport by ID (client-safe)
+ * Get sport by ID or name (server-safe)
  * Falls back to mock data if Supabase is not configured
+ * Works in both server and client components
+ * Supports both UUID lookups and name-based lookups (e.g., "football", "cricket")
  */
 export async function getSportById(id: string): Promise<Sport | undefined> {
-  const client = getPublicClient();
-  
-  // Fallback to mock data if Supabase is not configured
-  if (!client) {
-    return getMockSportById(id);
-  }
-
+  // getAllSports() already handles server/client correctly and fallbacks
   const sports = await getAllSports();
-  return sports.find((s) => s.id === id);
+  
+  // First try exact ID match (works for UUIDs and exact name matches)
+  let sport = sports.find((s) => s.id === id);
+  
+  // If not found and ID doesn't look like a UUID, try matching by name or slug
+  if (!sport && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    const normalizedId = id.toLowerCase().trim();
+    // Try matching by exact name (case-insensitive)
+    sport = sports.find((s) => s.name.toLowerCase() === normalizedId || s.id.toLowerCase() === normalizedId);
+    
+    // If still not found, try matching by creating a slug from the name
+    // (e.g., "Paddle Tennis" -> "paddle-tennis" or "paddletennis")
+    if (!sport) {
+      sport = sports.find((s) => {
+        const nameSlug = s.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+        const nameSlugNoDash = s.name.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
+        return nameSlug === normalizedId || nameSlugNoDash === normalizedId || 
+               s.name.toLowerCase().includes(normalizedId) || normalizedId.includes(s.name.toLowerCase());
+      });
+    }
+  }
+  
+  return sport;
 }
 
 /**
  * Get all sports (server-side, for admin)
  */
 export async function getAllSportsServer() {
-  const client = getServerClient();
+  const client = createServiceRoleClient();
   
   // Fallback to mock data if Supabase is not configured
   if (!client) {
     return mockSports.map((s) => ({
-      id: parseInt(s.id) || 0,
+      id: s.id, // UUID string
       name: s.name,
       description: s.description,
       image: s.image,
@@ -135,7 +153,7 @@ export async function getAllSportsServer() {
     }));
   }
 
-  const { data, error } = await (client as any).from("sports").select("*").order("id");
+  const { data, error } = await (client as any).from("sports").select("*").order("created_at", { ascending: false });
 
   if (error) {
     throw new Error(`Error fetching sports: ${error.message}`);
@@ -146,16 +164,17 @@ export async function getAllSportsServer() {
 
 /**
  * Get sport by ID (server-side)
+ * Accepts UUID string or number (for backward compatibility)
  */
-export async function getSportByIdServer(id: number) {
-  const client = getServerClient();
+export async function getSportByIdServer(id: number | string) {
+  const client = createServiceRoleClient();
   
   // Fallback to mock data if Supabase is not configured
   if (!client) {
     const sport = getMockSportById(id.toString());
     if (!sport) return null;
     return {
-      id: parseInt(sport.id) || 0,
+      id: sport.id, // UUID string
       name: sport.name,
       description: sport.description,
       image: sport.image,
@@ -163,7 +182,10 @@ export async function getSportByIdServer(id: number) {
     };
   }
 
-  const { data, error } = await (client as any).from("sports").select("*").eq("id", id).single();
+  // Convert to string if number (for backward compatibility)
+  const sportId = typeof id === 'number' ? id.toString() : id;
+
+  const { data, error } = await (client as any).from("sports").select("*").eq("id", sportId).single();
 
   if (error) {
     if (error.code === "PGRST116") {
@@ -183,7 +205,12 @@ export async function createSportServer(sportData: {
   description: string;
   image: string;
 }) {
-  const client = getServerClient();
+  const client = createServiceRoleClient();
+  
+  if (!client) {
+    throw new Error("Database is not configured. Please set up Supabase to create sports.");
+  }
+  
   const { data, error } = await (client as any)
     .from("sports")
     .insert({
@@ -203,20 +230,29 @@ export async function createSportServer(sportData: {
 
 /**
  * Update sport (server-side only, admin)
+ * Accepts UUID string or number (for backward compatibility)
  */
 export async function updateSportServer(
-  id: number,
+  id: number | string,
   updates: {
     name?: string;
     description?: string;
     image?: string;
   }
 ) {
-  const client = getServerClient();
+  const client = createServiceRoleClient();
+  
+  if (!client) {
+    throw new Error("Database is not configured. Please set up Supabase to update sports.");
+  }
+  
+  // Convert to string if number (for backward compatibility)
+  const sportId = typeof id === 'number' ? id.toString() : id;
+  
   const { data, error } = await (client as any)
     .from("sports")
     .update(updates)
-    .eq("id", id)
+    .eq("id", sportId)
     .select()
     .single();
 
@@ -229,10 +265,19 @@ export async function updateSportServer(
 
 /**
  * Delete sport (server-side only, admin)
+ * Accepts UUID string or number (for backward compatibility)
  */
-export async function deleteSportServer(id: number) {
-  const client = getServerClient();
-  const { error } = await (client as any).from("sports").delete().eq("id", id);
+export async function deleteSportServer(id: number | string) {
+  const client = createServiceRoleClient();
+  
+  if (!client) {
+    throw new Error("Database is not configured. Please set up Supabase to delete sports.");
+  }
+  
+  // Convert to string if number (for backward compatibility)
+  const sportId = typeof id === 'number' ? id.toString() : id;
+  
+  const { error } = await (client as any).from("sports").delete().eq("id", sportId);
 
   if (error) {
     throw new Error(`Error deleting sport: ${error.message}`);

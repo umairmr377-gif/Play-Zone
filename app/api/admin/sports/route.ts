@@ -8,10 +8,13 @@ import {
 } from "@/lib/admin";
 import { requireAdmin } from "@/lib/auth";
 import { logAdminMutation } from "@/lib/audit";
+import { logger } from "@/lib/logger";
+
+// Force dynamic rendering for routes using cookies/sessions
+export const dynamic = "force-dynamic";
 
 // Force Node.js runtime for Supabase compatibility
 export const runtime = 'nodejs';
-import { logger } from "@/lib/logger";
 
 // GET /api/admin/sports
 export async function GET() {

@@ -1,34 +1,6 @@
-import { createBrowserClient } from "@supabase/ssr";
-import { SupabaseClient } from "@supabase/supabase-js";
-
-/**
- * Get public Supabase client for client-side use
- * Uses public anon key - safe for client-side reads
- * This is a wrapper that ensures the client is created correctly with SSR support
- * Returns null if environment variables are not configured (for development)
- */
-export function getPublicClient(): SupabaseClient | null {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  // Validate environment variables are present and not placeholders
-  if (!url || !anonKey) {
-    console.warn("⚠️ Supabase env vars missing: NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
-    return null;
-  }
-
-  if (url.includes("placeholder") || anonKey.includes("placeholder") || 
-      url.includes("your-project") || anonKey.includes("your-anon")) {
-    console.warn("⚠️ Supabase env vars contain placeholder values");
-    return null;
-  }
-
-  // Use createBrowserClient for proper SSR/cookie handling in Next.js
-  return createBrowserClient<Database>(url, anonKey);
-}
-
 /**
  * Type definitions for Supabase database
+ * This file contains only types and can be safely imported in both server and client components
  */
 export interface Database {
   public: {
@@ -92,7 +64,7 @@ export interface Database {
         Row: {
           id: string; // UUID
           user_id: string | null; // UUID reference to auth.users
-          court_id: string; // UUID reference to courts
+          court: string; // TEXT - court name (not UUID foreign key)
           date: string; // DATE
           start_time: string; // TIME
           end_time: string; // TIME
@@ -105,7 +77,7 @@ export interface Database {
         Insert: {
           id?: string; // UUID
           user_id?: string | null; // UUID reference to auth.users
-          court_id: string; // UUID reference to courts
+          court: string; // TEXT - court name (not UUID foreign key)
           date: string; // DATE
           start_time: string; // TIME
           end_time: string; // TIME
@@ -118,7 +90,7 @@ export interface Database {
         Update: {
           id?: string; // UUID
           user_id?: string | null; // UUID reference to auth.users
-          court_id?: string; // UUID reference to courts
+          court?: string; // TEXT - court name (not UUID foreign key)
           date?: string; // DATE
           start_time?: string; // TIME
           end_time?: string; // TIME
@@ -126,6 +98,58 @@ export interface Database {
           price?: number; // NUMERIC(10, 2)
           customer_name?: string | null;
           customer_email?: string | null;
+          created_at?: string;
+        };
+      };
+      profiles: {
+        Row: {
+          id: string; // UUID reference to auth.users
+          full_name: string | null;
+          role: "user" | "admin";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string; // UUID reference to auth.users
+          full_name?: string | null;
+          role?: "user" | "admin";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string; // UUID reference to auth.users
+          full_name?: string | null;
+          role?: "user" | "admin";
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      audit_logs: {
+        Row: {
+          id: string; // UUID
+          user_id: string | null; // UUID reference to auth.users
+          action: string;
+          resource: string;
+          resource_id: string | null;
+          details: Record<string, any> | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string; // UUID
+          user_id?: string | null; // UUID reference to auth.users
+          action: string;
+          resource: string;
+          resource_id?: string | null;
+          details?: Record<string, any> | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string; // UUID
+          user_id?: string | null; // UUID reference to auth.users
+          action?: string;
+          resource?: string;
+          resource_id?: string | null;
+          details?: Record<string, any> | null;
           created_at?: string;
         };
       };

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { getServerClient } from "@/lib/supabaseServer";
+import { createServiceRoleClient } from "@/lib/supabase/server";
+
+// Force dynamic rendering for routes using cookies/sessions
+export const dynamic = "force-dynamic";
 
 // Force Node.js runtime for Supabase compatibility
 export const runtime = 'nodejs';
@@ -10,7 +13,7 @@ export async function GET(request: NextRequest) {
   try {
     await requireAdmin();
     const searchParams = request.nextUrl.searchParams;
-    const client = getServerClient();
+    const client = createServiceRoleClient();
 
     // Return empty array if Supabase is not configured
     if (!client) {

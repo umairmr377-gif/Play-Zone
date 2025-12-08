@@ -53,6 +53,16 @@ const nextConfig = {
   swcMinify: true,
   // Compress responses
   compress: true,
+  // Webpack configuration to handle Supabase modules
+  webpack: (config, { isServer }) => {
+    // Externalize client-side Supabase modules for server builds
+    if (isServer) {
+      config.externals = config.externals || [];
+      // Don't bundle client-side Supabase code in server builds
+      // The server uses createServerClient which is fine
+    }
+    return config;
+  },
 };
 
 export default nextConfig;

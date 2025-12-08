@@ -82,29 +82,44 @@ export default function AuthButton() {
               profile = data;
               setProfilesTableExists(true); // Cache that table exists
             } else if (error) {
-              // Check if it's a table not found error or schema cache error
-              // PostgrestError only has: message, details, hint, code (no status property)
+              // Check if it's a 404 or table not found error (suppress these)
               const errorMessage = error.message || "";
               const isTableMissing = 
+                error.status === 404 ||
                 error.code === "PGRST116" ||
                 error.code === "42P01" ||
+                errorMessage.includes("404") ||
                 errorMessage.includes("schema cache") ||
                 errorMessage.includes("relation") ||
                 errorMessage.includes("does not exist");
               
               if (isTableMissing) {
-                // Cache that table doesn't exist to prevent future requests
+                // Cache that table doesn't exist to prevent future requests (silently)
                 setProfilesTableExists(false);
+                // Don't log 404 errors to console
               } else {
-                // Other error - log it but don't spam console
-                console.warn("Profile fetch error (non-critical):", error.message);
+                // Other error - only log in development
+                if (process.env.NODE_ENV === 'development') {
+                  console.warn("Profile fetch error (non-critical):", error.message);
+                }
                 // Assume table exists for other errors
                 setProfilesTableExists(true);
               }
             }
           } catch (error: any) {
-            // Profile table might not exist yet - cache it
-            setProfilesTableExists(false);
+            // Silently handle table missing errors (404s)
+            const isTableMissing = error?.status === 404 || 
+              error?.message?.includes("404") ||
+              error?.code === "PGRST116" ||
+              error?.code === "42P01";
+            
+            if (isTableMissing) {
+              // Cache that table doesn't exist (silently)
+              setProfilesTableExists(false);
+            } else if (process.env.NODE_ENV === 'development') {
+              // Only log non-404 errors in development
+              console.warn("Profile fetch error:", error?.message);
+            }
           }
         }
 
