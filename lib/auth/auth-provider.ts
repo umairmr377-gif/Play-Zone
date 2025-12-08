@@ -160,43 +160,79 @@ function getSupabaseAuthProvider(): AuthProvider {
       }
       
       // Fetch profile for role (silently handle 404s)
+      // Note: Browser console may still show first 404, but subsequent queries will be skipped via cache
       let profile = null;
-      try {
-        const { data, error } = await (supabase as any)
-          .from("profiles")
-          .select("role, full_name")
-          .eq("id", authUser.id)
-          .single();
-        
-        // Check if error is 404 or table missing (suppress these errors)
-        const isTableMissing = error && (
-          error.status === 404 ||
-          error.code === "PGRST116" ||
-          error.code === "42P01" ||
-          (error.message && (
-            error.message.includes("404") ||
-            error.message.includes("schema cache") ||
-            error.message.includes("relation") ||
-            error.message.includes("does not exist")
-          ))
-        );
-        
-        // Only use profile if no error or error is not a 404/table missing
-        if (!isTableMissing && !error && data) {
-          profile = data;
+      
+      // Check cache first (client-side only) to avoid HTTP requests
+      let shouldSkip = false;
+      if (typeof window !== 'undefined') {
+        try {
+          const { shouldSkipProfilesQuery } = require("@/lib/utils/profiles-cache");
+          shouldSkip = shouldSkipProfilesQuery();
+        } catch {
+          // Cache utility not available - continue with query
         }
-        // Silently ignore 404/table missing errors
-      } catch (error: any) {
-        // Silently handle table missing errors (404s) - don't log to console
-        const isTableMissing = error?.status === 404 || 
-          error?.message?.includes("404") ||
-          error?.code === "PGRST116" ||
-          error?.code === "42P01";
-        
-        // Silently ignore if table is missing
-        if (!isTableMissing) {
-          // Only log non-404 errors (but suppress in production)
-          if (process.env.NODE_ENV === 'development') {
+      }
+      
+      if (!shouldSkip) {
+        try {
+          const { data, error } = await (supabase as any)
+            .from("profiles")
+            .select("role, full_name")
+            .eq("id", authUser.id)
+            .single();
+          
+          // Check if error is 404 or table missing (suppress these errors)
+          const isTableMissing = error && (
+            error.status === 404 ||
+            error.code === "PGRST116" ||
+            error.code === "42P01" ||
+            (error.message && (
+              error.message.includes("404") ||
+              error.message.includes("schema cache") ||
+              error.message.includes("relation") ||
+              error.message.includes("does not exist")
+            ))
+          );
+          
+          // Cache the result to prevent future queries (client-side only)
+          if (typeof window !== 'undefined') {
+            try {
+              const { setProfilesTableExists } = require("@/lib/utils/profiles-cache");
+              if (isTableMissing) {
+                setProfilesTableExists(false); // Cache that table doesn't exist
+              } else if (!error && data) {
+                setProfilesTableExists(true); // Cache that table exists
+              }
+            } catch {
+              // Cache utility not available - ignore
+            }
+          }
+          
+          // Only use profile if no error or error is not a 404/table missing
+          if (!isTableMissing && !error && data) {
+            profile = data;
+          }
+          // Silently ignore 404/table missing errors
+        } catch (error: any) {
+          // Silently handle table missing errors (404s)
+          const isTableMissing = error?.status === 404 || 
+            error?.message?.includes("404") ||
+            error?.code === "PGRST116" ||
+            error?.code === "42P01";
+          
+          // Cache the result (client-side only)
+          if (typeof window !== 'undefined' && isTableMissing) {
+            try {
+              const { setProfilesTableExists } = require("@/lib/utils/profiles-cache");
+              setProfilesTableExists(false);
+            } catch {
+              // Cache utility not available - ignore
+            }
+          }
+          
+          // Silently ignore if table is missing
+          if (!isTableMissing && process.env.NODE_ENV === 'development') {
             console.warn("Profile fetch error:", error?.message);
           }
         }

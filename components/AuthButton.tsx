@@ -9,6 +9,7 @@ import { User, LogOut, Settings, Calendar } from "lucide-react";
 import {
   shouldSkipProfilesQuery,
   setProfilesTableExists,
+  setSessionTableMissing,
 } from "@/lib/utils/profiles-cache";
 
 interface UserProfile {
@@ -68,6 +69,7 @@ export default function AuthButton() {
         let profile = null;
         
         // Skip query if we know table doesn't exist (prevents repeated 404s)
+        // This check happens BEFORE the HTTP request, preventing console errors
         const skipQuery = shouldSkipProfilesQuery();
         
         if (!skipQuery) {
@@ -80,9 +82,8 @@ export default function AuthButton() {
             
             if (!error && data) {
               profile = data;
-              setProfilesTableExists(true); // Cache that table exists
+              setProfilesTableExists(true);
             } else if (error) {
-              // Check if it's a 404 or table not found error (suppress these)
               const errorMessage = error.message || "";
               const isTableMissing = 
                 error.status === 404 ||
@@ -94,30 +95,25 @@ export default function AuthButton() {
                 errorMessage.includes("does not exist");
               
               if (isTableMissing) {
-                // Cache that table doesn't exist to prevent future requests (silently)
                 setProfilesTableExists(false);
-                // Don't log 404 errors to console
+                setSessionTableMissing(true);
               } else {
-                // Other error - only log in development
                 if (process.env.NODE_ENV === 'development') {
                   console.warn("Profile fetch error (non-critical):", error.message);
                 }
-                // Assume table exists for other errors
                 setProfilesTableExists(true);
               }
             }
           } catch (error: any) {
-            // Silently handle table missing errors (404s)
             const isTableMissing = error?.status === 404 || 
               error?.message?.includes("404") ||
               error?.code === "PGRST116" ||
               error?.code === "42P01";
             
             if (isTableMissing) {
-              // Cache that table doesn't exist (silently)
               setProfilesTableExists(false);
+              setSessionTableMissing(true);
             } else if (process.env.NODE_ENV === 'development') {
-              // Only log non-404 errors in development
               console.warn("Profile fetch error:", error?.message);
             }
           }

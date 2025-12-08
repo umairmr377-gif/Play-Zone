@@ -4,7 +4,10 @@
  */
 
 const CACHE_KEY = "supabase_profiles_table_exists";
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes (longer cache to prevent repeated queries)
+
+// Session-level flag to prevent queries in the same session after first 404
+let sessionTableMissing: boolean | null = null;
 
 interface CacheEntry {
   exists: boolean;
@@ -79,6 +82,25 @@ export function clearProfilesTableCache(): void {
  * Returns true if we should skip (table doesn't exist)
  */
 export function shouldSkipProfilesQuery(): boolean {
+  // Check session-level flag first (fastest check)
+  if (sessionTableMissing === true) {
+    return true;
+  }
+  
+  // Check localStorage cache
   const cached = getProfilesTableExistsCache();
-  return cached === false; // Skip if we know table doesn't exist
+  if (cached === false) {
+    sessionTableMissing = true; // Update session flag
+    return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Set session-level flag that table doesn't exist
+ * This prevents queries within the same session
+ */
+export function setSessionTableMissing(missing: boolean): void {
+  sessionTableMissing = missing;
 }
