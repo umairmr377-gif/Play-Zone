@@ -34,8 +34,7 @@ export default function AuthButton() {
     }
 
     checkUser();
-    
-    // Listen for auth changes
+
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(() => {
@@ -52,11 +51,7 @@ export default function AuthButton() {
       return;
     }
 
-    // Prevent parallel queries
-    if (isCheckingRef.current) {
-      return;
-    }
-
+    if (isCheckingRef.current) return;
     isCheckingRef.current = true;
 
     try {
@@ -64,70 +59,72 @@ export default function AuthButton() {
         data: { user: authUser },
       } = await supabase.auth.getUser();
 
-      if (authUser) {
-        // Fetch profile with role
-        let profile = null;
-        
-        // Skip query if we know table doesn't exist (prevents repeated 404s)
-        // This check happens BEFORE the HTTP request, preventing console errors
-        const skipQuery = shouldSkipProfilesQuery();
-        
-        if (!skipQuery) {
-          try {
-            const { data, error } = await supabase
-              .from("profiles")
-              .select("role, full_name")
-              .eq("id", authUser.id)
-              .single();
-            
-            if (!error && data) {
-              profile = data;
-              setProfilesTableExists(true);
-            } else if (error) {
-              const errorMessage = error.message || "";
-              const isTableMissing = 
-                error.status === 404 ||
-                error.code === "PGRST116" ||
-                error.code === "42P01" ||
-                errorMessage.includes("404") ||
-                errorMessage.includes("schema cache") ||
-                errorMessage.includes("relation") ||
-                errorMessage.includes("does not exist");
-              
-              if (isTableMissing) {
-                setProfilesTableExists(false);
-                setSessionTableMissing(true);
-              } else {
-                if (process.env.NODE_ENV === 'development') {
-                  console.warn("Profile fetch error (non-critical):", error.message);
-                }
-                setProfilesTableExists(true);
-              }
-            }
-          } catch (error: any) {
-            const isTableMissing = error?.status === 404 || 
-              error?.message?.includes("404") ||
+      if (!authUser) {
+        setUser(null);
+        return;
+      }
+
+      let profile = null;
+
+      const skipQuery = shouldSkipProfilesQuery();
+
+      if (!skipQuery) {
+        try {
+          const { data, error } = await supabase
+            .from("profiles")
+            .select("role, full_name")
+            .eq("id", authUser.id)
+            .single();
+
+          if (!error && data) {
+            profile = data;
+            setProfilesTableExists(true);
+          } else if (error) {
+            const errorMessage = String(error.message || "").toLowerCase();
+
+            const isTableMissing =
               error?.code === "PGRST116" ||
-              error?.code === "42P01";
-            
+              error?.code === "42P01" ||
+              errorMessage.includes("does not exist") ||
+              errorMessage.includes("relation") ||
+              errorMessage.includes("schema") ||
+              errorMessage.includes("404");
+
             if (isTableMissing) {
               setProfilesTableExists(false);
               setSessionTableMissing(true);
-            } else if (process.env.NODE_ENV === 'development') {
-              console.warn("Profile fetch error:", error?.message);
+            } else {
+              if (process.env.NODE_ENV === "development") {
+                console.warn("Profile fetch error (non-critical):", error.message);
+              }
+              setProfilesTableExists(true);
             }
           }
-        }
+        } catch (error: any) {
+          const msg = String(error?.message || "").toLowerCase();
 
-        setUser({
-          id: authUser.id,
-          email: authUser.email,
-          role: (profile?.role as "user" | "admin") || "user",
-          full_name: profile?.full_name || undefined,
-        });
-      } else {
-        setUser(null);
+          const isTableMissing =
+            error?.code === "PGRST116" ||
+            error?.code === "42P01" ||
+            msg.includes("404") ||
+            msg.includes("does not exist") ||
+            msg.includes("relation");
+
+          if (isTableMissing) {
+            setProfilesTableExists(false);
+            setSessionTableMissing(true);
+          } else if (process.env.NODE_ENV === "development") {
+            console.warn("Profile fetch error:", error?.message);
+          }
+        }
       }
+
+      setUser({
+        id: authUser.id,
+        email: authUser.email,
+        role: (profile?.role as "user" | "admin") || "user",
+        full_name: profile?.full_name || undefined,
+      });
     } catch (error) {
       console.error("Error checking user:", error);
       setUser(null);
@@ -139,7 +136,7 @@ export default function AuthButton() {
 
   const handleLogout = async () => {
     if (!supabase) return;
-    
+
     await supabase.auth.signOut();
     setUser(null);
     setShowMenu(false);
@@ -170,7 +167,9 @@ export default function AuthButton() {
         className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-[#0C0C10]/50 border border-transparent hover:border-white/10 transition-all duration-300"
       >
         <div className="w-9 h-9 bg-[#0C0C10] border border-white/10 rounded-full flex items-center justify-center text-white text-sm font-semibold shadow-[0_4px_16px_rgba(0,0,0,0.3)]">
-          {user.full_name?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || "U"}
+          {user.full_name?.[0]?.toUpperCase() ||
+            user.email?.[0]?.toUpperCase() ||
+            "U"}
         </div>
         <span className="hidden md:block text-sm font-medium text-white/90 tracking-wide">
           {user.full_name || user.email?.split("@")[0] || "User"}
@@ -196,7 +195,7 @@ export default function AuthButton() {
                   </span>
                 )}
               </div>
-              
+
               <Link
                 href="/bookings/my"
                 className="flex items-center gap-3 px-4 py-3 text-sm text-white/70 hover:text-white hover:bg-[#0C0C10]/50 rounded-xl transition-all duration-300 mb-1 group"
@@ -231,4 +230,3 @@ export default function AuthButton() {
     </div>
   );
 }
-
