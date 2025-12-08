@@ -59,7 +59,7 @@ export const sports: Sport[] = [
         name: "Cricket Net A",
         location: "Building 1, Basement",
         pricePerHour: 3000,
-        image: "/images/cricket-net-1.jpg",
+        image: "/images/cricket-net-1.jpeg",
         availableTimeSlots: generateTimeSlots(),
       },
       {
@@ -67,7 +67,7 @@ export const sports: Sport[] = [
         name: "Cricket Net B",
         location: "Building 1, Basement",
         pricePerHour: 3000,
-        image: "/images/cricket-net-2.jpg",
+        image: "/images/cricket-net-2.jpeg",
         availableTimeSlots: generateTimeSlots(),
       },
       {

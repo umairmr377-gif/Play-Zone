@@ -187,7 +187,7 @@ function getSupabaseAuthProvider(): AuthProvider {
           // Only treat as table-missing if message mentions relation/table
           const errorMessage = String(error?.message || "").toLowerCase();
           const isTableMissing = error && (
-            error.status === 404 ||
+            (error as any)?.status === 404 ||
             error.code === "42P01" ||
             (error.code === "PGRST116" && (
               errorMessage.includes("relation") ||
@@ -206,9 +206,10 @@ function getSupabaseAuthProvider(): AuthProvider {
           // Cache the result to prevent future queries (client-side only)
           if (typeof window !== 'undefined') {
             try {
-              const { setProfilesTableExists } = require("@/lib/utils/profiles-cache");
+              const { setProfilesTableExists, setSessionTableMissing } = require("@/lib/utils/profiles-cache");
               if (isTableMissing) {
                 setProfilesTableExists(false); // Cache that table doesn't exist
+                setSessionTableMissing(true); // Set session flag for immediate effect
               } else if (!error && data) {
                 setProfilesTableExists(true); // Cache that table exists
               }
@@ -227,7 +228,7 @@ function getSupabaseAuthProvider(): AuthProvider {
           // PGRST116 from SELECT = row missing, not table missing
           const errorMessage = String(error?.message || "").toLowerCase();
           const isTableMissing = 
-            error?.status === 404 || 
+            (error as any)?.status === 404 || 
             error?.code === "42P01" ||
             (error?.code === "PGRST116" && (
               errorMessage.includes("relation") ||
@@ -242,8 +243,9 @@ function getSupabaseAuthProvider(): AuthProvider {
           // Cache the result (client-side only)
           if (typeof window !== 'undefined' && isTableMissing) {
             try {
-              const { setProfilesTableExists } = require("@/lib/utils/profiles-cache");
+              const { setProfilesTableExists, setSessionTableMissing } = require("@/lib/utils/profiles-cache");
               setProfilesTableExists(false);
+              setSessionTableMissing(true); // Set session flag for immediate effect
             } catch {
               // Cache utility not available - ignore
             }
