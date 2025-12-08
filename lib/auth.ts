@@ -36,14 +36,28 @@ export async function getServerAuthSession(): Promise<AuthSession> {
       ----------------------------------------- */
       let profile: any = null;
 
-      const {
-        data: profileData,
-        error: profileFetchError,
-      } = await supabase
-        .from("profiles")
-        .select("role, full_name")
-        .eq("id", authUser.id)
-        .single();
+      // Check server-side cache before making query
+      let shouldSkipQuery = false;
+      try {
+        const { shouldSkipProfilesQueryServer } = await import("@/lib/utils/profiles-cache");
+        shouldSkipQuery = shouldSkipProfilesQueryServer();
+      } catch {
+        // Cache utility not available - continue with query
+      }
+
+      let profileData: any = null;
+      let profileFetchError: any = null;
+
+      if (!shouldSkipQuery) {
+        const result = await supabase
+          .from("profiles")
+          .select("role, full_name")
+          .eq("id", authUser.id)
+          .single();
+        
+        profileData = result.data;
+        profileFetchError = result.error;
+      }
 
       const tableMissing =
         profileFetchError &&
@@ -55,9 +69,14 @@ export async function getServerAuthSession(): Promise<AuthSession> {
           profileFetchError.message?.includes("relation")
         );
 
-      if (!profileFetchError && profileData) {
-        profile = profileData;
-      } else if (tableMissing) {
+      // Update server-side cache if table is missing
+      if (tableMissing) {
+        try {
+          const { setServerProfilesTableCache } = await import("@/lib/utils/profiles-cache");
+          setServerProfilesTableCache(false);
+        } catch {
+          // Cache utility not available - ignore
+        }
         // Table missing → user still logs in with default role
         return {
           user: {
@@ -68,17 +87,55 @@ export async function getServerAuthSession(): Promise<AuthSession> {
         };
       }
 
+      if (!profileFetchError && profileData) {
+        profile = profileData;
+        // Update cache that table exists
+        try {
+          const { setServerProfilesTableCache } = await import("@/lib/utils/profiles-cache");
+          setServerProfilesTableCache(true);
+        } catch {
+          // Cache utility not available - ignore
+        }
+      }
+
       /* -----------------------------------------
          HANDLE MISSING PROFILE ROW
       ----------------------------------------- */
       if (!profile) {
-        const { error: createErr } = await supabase
-          .from("profiles")
-          .insert({
-            id: authUser.id,
-            role: "user",
-            full_name: authUser.email?.split("@")[0] || null,
-          });
+        // Check cache before attempting insert (if table doesn't exist, skip insert)
+        let skipInsert = false;
+        try {
+          const { shouldSkipProfilesQueryServer } = await import("@/lib/utils/profiles-cache");
+          skipInsert = shouldSkipProfilesQueryServer();
+        } catch {
+          // Cache utility not available - continue with insert attempt
+        }
+
+        if (!skipInsert) {
+          const { error: createErr } = await supabase
+            .from("profiles")
+            .insert({
+              id: authUser.id,
+              role: "user",
+              full_name: authUser.email?.split("@")[0] || null,
+            });
+
+          // If insert fails due to missing table, update cache
+          if (createErr && (
+            createErr.code === "42P01" ||
+            createErr.code === "PGRST116" ||
+            createErr.message?.includes("does not exist") ||
+            createErr.message?.includes("404") ||
+            createErr.message?.includes("relation")
+          )) {
+            try {
+              const { setServerProfilesTableCache } = await import("@/lib/utils/profiles-cache");
+              setServerProfilesTableCache(false);
+            } catch {
+              // Cache utility not available - ignore
+            }
+          }
+        }
 
         // If profile creation fails → still return safe user
         return {
@@ -152,13 +209,46 @@ export async function getUserProfile(userId: string) {
     const client = getServerClient();
     if (!client) return null;
 
+    // Check server-side cache before making query
+    let shouldSkipQuery = false;
+    try {
+      const { shouldSkipProfilesQueryServer } = await import("@/lib/utils/profiles-cache");
+      shouldSkipQuery = shouldSkipProfilesQueryServer();
+    } catch {
+      // Cache utility not available - continue with query
+    }
+
+    if (shouldSkipQuery) {
+      return null; // Table doesn't exist, return null
+    }
+
     const { data, error } = await client
       .from("profiles")
       .select("*")
       .eq("id", userId)
       .single();
 
-    if (error) throw new Error(`Error fetching user profile: ${error.message}`);
+    if (error) {
+      // Check if error is due to missing table
+      const tableMissing =
+        error.code === "42P01" ||
+        error.code === "PGRST116" ||
+        error.message?.includes("does not exist") ||
+        error.message?.includes("404") ||
+        error.message?.includes("relation");
+
+      if (tableMissing) {
+        // Update cache and return null
+        try {
+          const { setServerProfilesTableCache } = await import("@/lib/utils/profiles-cache");
+          setServerProfilesTableCache(false);
+        } catch {
+          // Cache utility not available - ignore
+        }
+        return null;
+      }
+      throw new Error(`Error fetching user profile: ${error.message}`);
+    }
     return data;
   }
 
@@ -181,20 +271,58 @@ export async function updateUserRole(userId: string, role: "user" | "admin") {
     const client = getServerClient();
     if (!client) throw new Error("Supabase not configured.");
 
-    const { data, error } = await client
+    // Check server-side cache before making query
+    let shouldSkipQuery = false;
+    try {
+      const { shouldSkipProfilesQueryServer } = await import("@/lib/utils/profiles-cache");
+      shouldSkipQuery = shouldSkipProfilesQueryServer();
+    } catch {
+      // Cache utility not available - continue with query
+    }
+
+    if (shouldSkipQuery) {
+      throw new Error("Profiles table does not exist");
+    }
+
+    const { data, error } = await (client as any)
       .from("profiles")
       .update({ role })
       .eq("id", userId)
       .select()
       .single();
 
-    if (error) throw new Error(`Error updating role: ${error.message}`);
+    if (error) {
+      // Check if error is due to missing table
+      const tableMissing =
+        error.code === "42P01" ||
+        error.code === "PGRST116" ||
+        error.message?.includes("does not exist") ||
+        error.message?.includes("404") ||
+        error.message?.includes("relation");
 
+      if (tableMissing) {
+        // Update cache
+        try {
+          const { setServerProfilesTableCache } = await import("@/lib/utils/profiles-cache");
+          setServerProfilesTableCache(false);
+        } catch {
+          // Cache utility not available - ignore
+        }
+        throw new Error("Profiles table does not exist");
+      }
+      throw new Error(`Error updating role: ${error.message}`);
+    }
+
+    if (!data) {
+      throw new Error("No data returned from update");
+    }
+
+    const profileData = data as { id: string; email: string; role: string; full_name: string | null };
     return {
-      id: data.id,
-      email: data.email,
-      role: data.role,
-      full_name: data.full_name,
+      id: profileData.id,
+      email: profileData.email,
+      role: profileData.role,
+      full_name: profileData.full_name,
     };
   }
 

@@ -104,3 +104,32 @@ export function shouldSkipProfilesQuery(): boolean {
 export function setSessionTableMissing(missing: boolean): void {
   sessionTableMissing = missing;
 }
+
+/* -----------------------------------------------------
+   SERVER-SIDE CACHE (In-Memory)
+----------------------------------------------------- */
+// Server-side in-memory cache (persists for Node.js process lifetime)
+let serverCache: boolean | null = null;
+
+/**
+ * Check if profiles table exists (server-side cache)
+ * Returns null if unknown, true if exists, false if doesn't exist
+ */
+export function getServerProfilesTableCache(): boolean | null {
+  return serverCache;
+}
+
+/**
+ * Set server-side cache for profiles table existence
+ */
+export function setServerProfilesTableCache(exists: boolean): void {
+  serverCache = exists;
+}
+
+/**
+ * Check if we should skip querying profiles table (server-side)
+ * Returns true if we should skip (table doesn't exist)
+ */
+export function shouldSkipProfilesQueryServer(): boolean {
+  return serverCache === false;
+}
