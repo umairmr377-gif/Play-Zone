@@ -382,4 +382,3 @@ function getLocalAuthProvider(): AuthProvider {
     },
   };
 }
-
