@@ -61,70 +61,86 @@ export default function AuthButton() {
 
       if (!authUser) {
         setUser(null);
-        return;
-      }
+        // Don't return early - let finally block reset isCheckingRef.current
+      } else {
+        let profile = null;
 
-      let profile = null;
+        const skipQuery = shouldSkipProfilesQuery();
 
-      const skipQuery = shouldSkipProfilesQuery();
+        if (!skipQuery) {
+          try {
+            const { data, error } = await supabase
+              .from("profiles")
+              .select("role, full_name")
+              .eq("id", authUser.id)
+              .single();
 
-      if (!skipQuery) {
-        try {
-          const { data, error } = await supabase
-            .from("profiles")
-            .select("role, full_name")
-            .eq("id", authUser.id)
-            .single();
+            if (!error && data) {
+              profile = data;
+              setProfilesTableExists(true);
+            } else if (error) {
+              const errorMessage = String(error.message || "").toLowerCase();
 
-          if (!error && data) {
-            profile = data;
-            setProfilesTableExists(true);
-          } else if (error) {
-            const errorMessage = String(error.message || "").toLowerCase();
+              // PGRST116 from SELECT = row missing, not table missing
+              // Only treat as table-missing if message mentions relation/table
+              const isTableMissing =
+                (error as any)?.status === 404 ||
+                error?.code === "42P01" ||
+                (error?.code === "PGRST116" && (
+                  errorMessage.includes("relation") ||
+                  errorMessage.includes("table") ||
+                  errorMessage.includes("schema cache")
+                )) ||
+                errorMessage.includes("does not exist") ||
+                errorMessage.includes("relation") ||
+                errorMessage.includes("table") ||
+                errorMessage.includes("schema cache") ||
+                errorMessage.includes("404");
 
+              if (isTableMissing) {
+                setProfilesTableExists(false);
+                setSessionTableMissing(true);
+              } else {
+                if (process.env.NODE_ENV === "development") {
+                  console.warn("Profile fetch error (non-critical):", error.message);
+                }
+                setProfilesTableExists(true);
+              }
+            }
+          } catch (error: any) {
+            const msg = String(error?.message || "").toLowerCase();
+
+            // PGRST116 from SELECT = row missing, not table missing
+            // Only treat as table-missing if message mentions relation/table
             const isTableMissing =
-              error?.code === "PGRST116" ||
+              (error as any)?.status === 404 ||
               error?.code === "42P01" ||
-              errorMessage.includes("does not exist") ||
-              errorMessage.includes("relation") ||
-              errorMessage.includes("schema") ||
-              errorMessage.includes("404");
+              (error?.code === "PGRST116" && (
+                msg.includes("relation") ||
+                msg.includes("table") ||
+                msg.includes("schema cache")
+              )) ||
+              msg.includes("404") ||
+              msg.includes("does not exist") ||
+              msg.includes("relation") ||
+              msg.includes("table");
 
             if (isTableMissing) {
               setProfilesTableExists(false);
               setSessionTableMissing(true);
-            } else {
-              if (process.env.NODE_ENV === "development") {
-                console.warn("Profile fetch error (non-critical):", error.message);
-              }
-              setProfilesTableExists(true);
+            } else if (process.env.NODE_ENV === "development") {
+              console.warn("Profile fetch error:", error?.message);
             }
           }
-        } catch (error: any) {
-          const msg = String(error?.message || "").toLowerCase();
-
-          const isTableMissing =
-            error?.code === "PGRST116" ||
-            error?.code === "42P01" ||
-            msg.includes("404") ||
-            msg.includes("does not exist") ||
-            msg.includes("relation");
-
-          if (isTableMissing) {
-            setProfilesTableExists(false);
-            setSessionTableMissing(true);
-          } else if (process.env.NODE_ENV === "development") {
-            console.warn("Profile fetch error:", error?.message);
-          }
         }
-      }
 
-      setUser({
-        id: authUser.id,
-        email: authUser.email,
-        role: (profile?.role as "user" | "admin") || "user",
-        full_name: profile?.full_name || undefined,
-      });
+        setUser({
+          id: authUser.id,
+          email: authUser.email,
+          role: (profile?.role as "user" | "admin") || "user",
+          full_name: profile?.full_name || undefined,
+        });
+      }
     } catch (error) {
       console.error("Error checking user:", error);
       setUser(null);

@@ -13,6 +13,57 @@ export interface AuthSession {
 }
 
 /* -----------------------------------------------------
+   HELPER: DETECT TABLE-MISSING ERRORS
+----------------------------------------------------- */
+/**
+ * Check if an error indicates the table doesn't exist (not just row missing)
+ * PGRST116 means "resource not found" which could be table OR row missing
+ * We only treat it as table-missing if the error message specifically mentions table/relation
+ * OR if it's from an INSERT operation (INSERT failing with PGRST116 = table missing)
+ */
+function isTableMissingError(error: any, isInsertOperation: boolean = false): boolean {
+  if (!error) return false;
+
+  const errorCode = error.code;
+  const errorMessage = String(error.message || "").toLowerCase();
+  const errorStatus = error.status;
+
+  // 42P01 = definite table missing (PostgreSQL error)
+  if (errorCode === "42P01") {
+    return true;
+  }
+
+  // PGRST116 = resource not found (could be table OR row)
+  // Only treat as table-missing if:
+  // 1. Error message mentions "relation" or "table" doesn't exist
+  // 2. OR it's from an INSERT operation (INSERT failing = table missing)
+  if (errorCode === "PGRST116") {
+    if (isInsertOperation) {
+      return true; // INSERT failing with PGRST116 = table doesn't exist
+    }
+    // For SELECT operations, only treat as table-missing if message mentions relation/table
+    return (
+      errorMessage.includes("relation") ||
+      errorMessage.includes("table") ||
+      errorMessage.includes("schema cache")
+    );
+  }
+
+  // Check error message for table-missing indicators (case-insensitive)
+  if (
+    errorStatus === 404 ||
+    errorMessage.includes("does not exist") ||
+    errorMessage.includes("relation") ||
+    errorMessage.includes("table") ||
+    errorMessage.includes("schema cache")
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/* -----------------------------------------------------
    SERVER AUTH SESSION (SUPABASE + FALLBACK LOCAL AUTH)
 ----------------------------------------------------- */
 export async function getServerAuthSession(): Promise<AuthSession> {
@@ -59,15 +110,9 @@ export async function getServerAuthSession(): Promise<AuthSession> {
         profileFetchError = result.error;
       }
 
-      const tableMissing =
-        profileFetchError &&
-        (
-          profileFetchError.code === "42P01" || // table missing
-          profileFetchError.code === "PGRST116" || // resource not found
-          profileFetchError.message?.includes("does not exist") ||
-          profileFetchError.message?.includes("404") ||
-          profileFetchError.message?.includes("relation")
-        );
+      // Check if error indicates table missing (not just row missing)
+      // PGRST116 from SELECT = row missing, not table missing
+      const tableMissing = isTableMissingError(profileFetchError, false);
 
       // Update server-side cache if table is missing
       if (tableMissing) {
@@ -121,13 +166,8 @@ export async function getServerAuthSession(): Promise<AuthSession> {
             });
 
           // If insert fails due to missing table, update cache
-          if (createErr && (
-            createErr.code === "42P01" ||
-            createErr.code === "PGRST116" ||
-            createErr.message?.includes("does not exist") ||
-            createErr.message?.includes("404") ||
-            createErr.message?.includes("relation")
-          )) {
+          // For INSERT operations, PGRST116 = table missing (not row missing)
+          if (createErr && isTableMissingError(createErr, true)) {
             try {
               const { setServerProfilesTableCache } = await import("@/lib/utils/profiles-cache");
               setServerProfilesTableCache(false);
@@ -229,13 +269,9 @@ export async function getUserProfile(userId: string) {
       .single();
 
     if (error) {
-      // Check if error is due to missing table
-      const tableMissing =
-        error.code === "42P01" ||
-        error.code === "PGRST116" ||
-        error.message?.includes("does not exist") ||
-        error.message?.includes("404") ||
-        error.message?.includes("relation");
+      // Check if error is due to missing table (not just row missing)
+      // PGRST116 from SELECT = row missing, not table missing
+      const tableMissing = isTableMissingError(error, false);
 
       if (tableMissing) {
         // Update cache and return null
@@ -293,12 +329,9 @@ export async function updateUserRole(userId: string, role: "user" | "admin") {
 
     if (error) {
       // Check if error is due to missing table
-      const tableMissing =
-        error.code === "42P01" ||
-        error.code === "PGRST116" ||
-        error.message?.includes("does not exist") ||
-        error.message?.includes("404") ||
-        error.message?.includes("relation");
+      // For UPDATE operations, PGRST116 could mean table OR row missing
+      // Check error message to distinguish
+      const tableMissing = isTableMissingError(error, false);
 
       if (tableMissing) {
         // Update cache
