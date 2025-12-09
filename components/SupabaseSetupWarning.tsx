@@ -4,9 +4,23 @@ import { createClient } from "@/lib/supabase/client";
 import Card from "./Card";
 import { AlertCircle, ExternalLink } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 export default function SupabaseSetupWarning() {
   const supabase = createClient();
+  const [isVercel, setIsVercel] = useState(false);
+  
+  useEffect(() => {
+    // Check if deployed on Vercel
+    if (typeof window !== "undefined") {
+      const hostname = window.location.hostname;
+      setIsVercel(
+        hostname.includes("vercel.app") ||
+        hostname.includes("vercel.com") ||
+        process.env.NEXT_PUBLIC_VERCEL === "1"
+      );
+    }
+  }, []);
   
   // Only show if Supabase is not configured
   if (supabase) return null;
@@ -24,6 +38,11 @@ export default function SupabaseSetupWarning() {
             </h3>
             <p className="text-xs text-white/50 mb-4 font-light leading-relaxed">
               Authentication features are disabled. Set up Supabase to enable sign-in and bookings.
+              {isVercel && (
+                <span className="block mt-2 text-yellow-400/80 font-medium">
+                  ⚠️ Deployed on Vercel? Add environment variables in Vercel dashboard (not .env.local)
+                </span>
+              )}
             </p>
             <div className="flex flex-col gap-2">
               <Link
@@ -35,12 +54,21 @@ export default function SupabaseSetupWarning() {
                 Get Supabase Credentials
                 <ExternalLink className="w-3 h-3" />
               </Link>
-              <Link
-                href="/QUICK_FIX_SUPABASE.md"
-                className="text-xs text-white/50 hover:text-white/70 font-medium transition-colors tracking-wide"
-              >
-                View Setup Instructions →
-              </Link>
+              {isVercel ? (
+                <Link
+                  href="/VERCEL_ENV_SETUP.md"
+                  className="text-xs text-white/50 hover:text-white/70 font-medium transition-colors tracking-wide"
+                >
+                  Vercel Setup Instructions →
+                </Link>
+              ) : (
+                <Link
+                  href="/QUICK_FIX_SUPABASE.md"
+                  className="text-xs text-white/50 hover:text-white/70 font-medium transition-colors tracking-wide"
+                >
+                  Local Setup Instructions →
+                </Link>
+              )}
             </div>
           </div>
         </div>
