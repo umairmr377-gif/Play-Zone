@@ -90,15 +90,23 @@ export async function middleware(request: NextRequest) {
         .single();
       
       // Check if error is 404 or table missing (suppress these errors)
+      // PGRST116 from SELECT = row missing, not table missing
+      // Only treat as table-missing if message mentions relation/table
+      const errorMessage = String(error?.message || "").toLowerCase();
       const isTableMissing = error && (
-        error.status === 404 ||
-        error.code === "PGRST116" ||
+        (error as any)?.status === 404 ||
         error.code === "42P01" ||
-        (error.message && (
-          error.message.includes("404") ||
-          error.message.includes("schema cache") ||
-          error.message.includes("relation") ||
-          error.message.includes("does not exist")
+        (error.code === "PGRST116" && (
+          errorMessage.includes("relation") ||
+          errorMessage.includes("table") ||
+          errorMessage.includes("schema cache")
+        )) ||
+        (errorMessage && (
+          errorMessage.includes("404") ||
+          errorMessage.includes("schema cache") ||
+          errorMessage.includes("relation") ||
+          errorMessage.includes("table") ||
+          errorMessage.includes("does not exist")
         ))
       );
       
@@ -109,10 +117,20 @@ export async function middleware(request: NextRequest) {
       // Silently ignore 404/table missing errors
     } catch (error: any) {
       // Silently handle table missing errors (404s) - don't log to console
-      const isTableMissing = error?.status === 404 || 
-        error?.message?.includes("404") ||
-        error?.code === "PGRST116" ||
-        error?.code === "42P01";
+      // PGRST116 from SELECT = row missing, not table missing
+      const errorMessage = String(error?.message || "").toLowerCase();
+      const isTableMissing = 
+        (error as any)?.status === 404 || 
+        error?.code === "42P01" ||
+        (error?.code === "PGRST116" && (
+          errorMessage.includes("relation") ||
+          errorMessage.includes("table") ||
+          errorMessage.includes("schema cache")
+        )) ||
+        errorMessage.includes("404") ||
+        errorMessage.includes("does not exist") ||
+        errorMessage.includes("relation") ||
+        errorMessage.includes("table");
       
       // Silently ignore if table is missing (default to user role)
       if (!isTableMissing && process.env.NODE_ENV === 'development') {
