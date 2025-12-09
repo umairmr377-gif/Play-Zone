@@ -26,7 +26,7 @@ function isTableMissingError(error: any, isInsertOperation: boolean = false): bo
 
   const errorCode = error.code;
   const errorMessage = String(error.message || "").toLowerCase();
-  const errorStatus = error.status;
+  const errorStatus = (error as any)?.status;
 
   // 42P01 = definite table missing (PostgreSQL error)
   if (errorCode === "42P01") {
