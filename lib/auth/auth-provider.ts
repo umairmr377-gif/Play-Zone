@@ -9,6 +9,7 @@
 
 import { isSupabaseConfigured } from "../safe-supabase";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { analyzeProfileError } from "../utils/profile-error-handler";
 
 // This function should only be called from client-side code
 // We use a lazy getter pattern to avoid bundling issues
@@ -182,34 +183,21 @@ function getSupabaseAuthProvider(): AuthProvider {
             .eq("id", authUser.id)
             .single();
           
-          // Check if error is 404 or table missing (suppress these errors)
-          // PGRST116 from SELECT = row missing, not table missing
-          // Only treat as table-missing if message mentions relation/table
-          const errorMessage = String(error?.message || "").toLowerCase();
-          const isTableMissing = error && (
-            (error as any)?.status === 404 ||
-            error.code === "42P01" ||
-            (error.code === "PGRST116" && (
-              errorMessage.includes("relation") ||
-              errorMessage.includes("table") ||
-              errorMessage.includes("schema cache")
-            )) ||
-            (errorMessage && (
-              errorMessage.includes("404") ||
-              errorMessage.includes("schema cache") ||
-              errorMessage.includes("relation") ||
-              errorMessage.includes("table") ||
-              errorMessage.includes("does not exist")
-            ))
-          );
+          // Use unified error analysis
+          const errorAnalysis = error ? analyzeProfileError(error, false) : {
+            isTableMissing: false,
+            isRowMissing: false,
+            shouldSkipQuery: false,
+          };
           
-          // Cache the result to prevent future queries (client-side only)
+          // Cache the result IMMEDIATELY to prevent future requests (client-side only)
           if (typeof window !== 'undefined') {
             try {
               const { setProfilesTableExists, setSessionTableMissing } = require("@/lib/utils/profiles-cache");
-              if (isTableMissing) {
-                setProfilesTableExists(false); // Cache that table doesn't exist
-                setSessionTableMissing(true); // Set session flag for immediate effect
+              if (errorAnalysis.isTableMissing) {
+                // Set cache IMMEDIATELY to prevent future 404 requests
+                setProfilesTableExists(false);
+                setSessionTableMissing(true);
               } else if (!error && data) {
                 setProfilesTableExists(true); // Cache that table exists
               }
@@ -219,44 +207,33 @@ function getSupabaseAuthProvider(): AuthProvider {
           }
           
           // Only use profile if no error or error is not a 404/table missing
-          if (!isTableMissing && !error && data) {
+          if (!errorAnalysis.isTableMissing && !error && data) {
             profile = data;
           }
-          // Silently ignore 404/table missing errors
+          // Silently ignore 404/table missing errors - profile remains null
         } catch (error: any) {
-          // Silently handle table missing errors (404s)
-          // PGRST116 from SELECT = row missing, not table missing
-          const errorMessage = String(error?.message || "").toLowerCase();
-          const isTableMissing = 
-            (error as any)?.status === 404 || 
-            error?.code === "42P01" ||
-            (error?.code === "PGRST116" && (
-              errorMessage.includes("relation") ||
-              errorMessage.includes("table") ||
-              errorMessage.includes("schema cache")
-            )) ||
-            errorMessage.includes("404") ||
-            errorMessage.includes("does not exist") ||
-            errorMessage.includes("relation") ||
-            errorMessage.includes("table");
+          // Use unified error analysis
+          const errorAnalysis = analyzeProfileError(error, false);
           
-          // Cache the result (client-side only)
-          if (typeof window !== 'undefined' && isTableMissing) {
+          // Cache the result IMMEDIATELY (client-side only)
+          if (typeof window !== 'undefined' && errorAnalysis.isTableMissing) {
             try {
               const { setProfilesTableExists, setSessionTableMissing } = require("@/lib/utils/profiles-cache");
+              // Set cache IMMEDIATELY to prevent future 404 requests
               setProfilesTableExists(false);
-              setSessionTableMissing(true); // Set session flag for immediate effect
+              setSessionTableMissing(true);
             } catch {
               // Cache utility not available - ignore
             }
           }
           
           // Silently ignore if table is missing
-          if (!isTableMissing && process.env.NODE_ENV === 'development') {
+          if (!errorAnalysis.isTableMissing && process.env.NODE_ENV === 'development') {
             console.warn("Profile fetch error:", error?.message);
           }
         }
       }
+      // If shouldSkip is true, profile remains null (user gets default role)
       
       return {
         id: authUser.id,

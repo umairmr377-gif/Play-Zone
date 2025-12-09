@@ -9,6 +9,9 @@ const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes (longer cache to prevent re
 // Session-level flag to prevent queries in the same session after first 404
 let sessionTableMissing: boolean | null = null;
 
+// Track in-flight requests to prevent duplicate simultaneous requests
+let inFlightRequest: Promise<any> | null = null;
+
 interface CacheEntry {
   exists: boolean;
   timestamp: number;
@@ -82,6 +85,10 @@ export function clearProfilesTableCache(): void {
  * Returns true if we should skip (table doesn't exist)
  */
 export function shouldSkipProfilesQuery(): boolean {
+  if (typeof window === "undefined") {
+    return false; // Server-side - don't skip
+  }
+
   // Check session-level flag first (fastest check)
   if (sessionTableMissing === true) {
     return true;
@@ -103,6 +110,18 @@ export function shouldSkipProfilesQuery(): boolean {
  */
 export function setSessionTableMissing(missing: boolean): void {
   sessionTableMissing = missing;
+  // Also update localStorage immediately for persistence
+  if (missing && typeof window !== "undefined") {
+    try {
+      const entry: CacheEntry = {
+        exists: false,
+        timestamp: Date.now(),
+      };
+      localStorage.setItem(CACHE_KEY, JSON.stringify(entry));
+    } catch {
+      // Ignore localStorage errors
+    }
+  }
 }
 
 /* -----------------------------------------------------

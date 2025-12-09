@@ -3,6 +3,7 @@ import { getServerClient } from "./supabaseServer";
 import { getAuthProvider } from "./auth/auth-provider";
 import { isSupabaseConfigured } from "./safe-supabase";
 import { redirect } from "next/navigation";
+import { analyzeProfileError, getDefaultProfile } from "./utils/profile-error-handler";
 
 export interface AuthSession {
   user: {
@@ -10,57 +11,6 @@ export interface AuthSession {
     email?: string;
     role: "user" | "admin";
   } | null;
-}
-
-/* -----------------------------------------------------
-   HELPER: DETECT TABLE-MISSING ERRORS
------------------------------------------------------ */
-/**
- * Check if an error indicates the table doesn't exist (not just row missing)
- * PGRST116 means "resource not found" which could be table OR row missing
- * We only treat it as table-missing if the error message specifically mentions table/relation
- * OR if it's from an INSERT operation (INSERT failing with PGRST116 = table missing)
- */
-function isTableMissingError(error: any, isInsertOperation: boolean = false): boolean {
-  if (!error) return false;
-
-  const errorCode = error.code;
-  const errorMessage = String(error.message || "").toLowerCase();
-  const errorStatus = (error as any)?.status;
-
-  // 42P01 = definite table missing (PostgreSQL error)
-  if (errorCode === "42P01") {
-    return true;
-  }
-
-  // PGRST116 = resource not found (could be table OR row)
-  // Only treat as table-missing if:
-  // 1. Error message mentions "relation" or "table" doesn't exist
-  // 2. OR it's from an INSERT operation (INSERT failing = table missing)
-  if (errorCode === "PGRST116") {
-    if (isInsertOperation) {
-      return true; // INSERT failing with PGRST116 = table doesn't exist
-    }
-    // For SELECT operations, only treat as table-missing if message mentions relation/table
-    return (
-      errorMessage.includes("relation") ||
-      errorMessage.includes("table") ||
-      errorMessage.includes("schema cache")
-    );
-  }
-
-  // Check error message for table-missing indicators (case-insensitive)
-  if (
-    errorStatus === 404 ||
-    errorMessage.includes("does not exist") ||
-    errorMessage.includes("relation") ||
-    errorMessage.includes("table") ||
-    errorMessage.includes("schema cache")
-  ) {
-    return true;
-  }
-
-  return false;
 }
 
 /* -----------------------------------------------------
@@ -110,12 +60,11 @@ export async function getServerAuthSession(): Promise<AuthSession> {
         profileFetchError = result.error;
       }
 
-      // Check if error indicates table missing (not just row missing)
-      // PGRST116 from SELECT = row missing, not table missing
-      const tableMissing = isTableMissingError(profileFetchError, false);
+      // Use unified error analysis
+      const errorAnalysis = analyzeProfileError(profileFetchError, false);
 
       // Update server-side cache if table is missing
-      if (tableMissing) {
+      if (errorAnalysis.isTableMissing) {
         try {
           const { setServerProfilesTableCache } = await import("@/lib/utils/profiles-cache");
           setServerProfilesTableCache(false);
@@ -147,44 +96,56 @@ export async function getServerAuthSession(): Promise<AuthSession> {
          HANDLE MISSING PROFILE ROW
       ----------------------------------------- */
       if (!profile) {
-        // Check cache before attempting insert (if table doesn't exist, skip insert)
-        let skipInsert = false;
-        try {
-          const { shouldSkipProfilesQueryServer } = await import("@/lib/utils/profiles-cache");
-          skipInsert = shouldSkipProfilesQueryServer();
-        } catch {
-          // Cache utility not available - continue with insert attempt
-        }
+        // Row missing (PGRST116) - try to create profile
+        // Skip insert if we know table doesn't exist
+        if (!errorAnalysis.shouldSkipQuery && errorAnalysis.isRowMissing) {
+          try {
+            const { error: createErr } = await supabase
+              .from("profiles")
+              .insert({
+                id: authUser.id,
+                role: "user",
+                full_name: authUser.email?.split("@")[0] || null,
+              });
 
-        if (!skipInsert) {
-          const { error: createErr } = await supabase
-            .from("profiles")
-            .insert({
-              id: authUser.id,
-              role: "user",
-              full_name: authUser.email?.split("@")[0] || null,
-            });
-
-          // If insert fails due to missing table, update cache
-          // For INSERT operations, PGRST116 = table missing (not row missing)
-          if (createErr && isTableMissingError(createErr, true)) {
-            try {
-              const { setServerProfilesTableCache } = await import("@/lib/utils/profiles-cache");
-              setServerProfilesTableCache(false);
-            } catch {
-              // Cache utility not available - ignore
+            // If insert succeeds, fetch the new profile
+            if (!createErr) {
+              const { data: newProfile } = await supabase
+                .from("profiles")
+                .select("role, full_name")
+                .eq("id", authUser.id)
+                .single();
+              
+              if (newProfile) {
+                profile = newProfile;
+              }
+            } else {
+              // If insert fails due to missing table, update cache
+              const insertErrorAnalysis = analyzeProfileError(createErr, true);
+              if (insertErrorAnalysis.isTableMissing) {
+                try {
+                  const { setServerProfilesTableCache } = await import("@/lib/utils/profiles-cache");
+                  setServerProfilesTableCache(false);
+                } catch {
+                  // Cache utility not available - ignore
+                }
+              }
             }
+          } catch (insertErr) {
+            // Insert failed - continue with default role
           }
         }
 
         // If profile creation fails → still return safe user
-        return {
-          user: {
-            id: authUser.id,
-            email: authUser.email,
-            role: "user",
-          },
-        };
+        if (!profile) {
+          return {
+            user: {
+              id: authUser.id,
+              email: authUser.email,
+              role: "user",
+            },
+          };
+        }
       }
 
       // ✅ Return final user
@@ -268,12 +229,11 @@ export async function getUserProfile(userId: string) {
       .eq("id", userId)
       .single();
 
-    if (error) {
-      // Check if error is due to missing table (not just row missing)
-      // PGRST116 from SELECT = row missing, not table missing
-      const tableMissing = isTableMissingError(error, false);
+      if (error) {
+      // Use unified error analysis
+      const errorAnalysis = analyzeProfileError(error, false);
 
-      if (tableMissing) {
+      if (errorAnalysis.isTableMissing) {
         // Update cache and return null
         try {
           const { setServerProfilesTableCache } = await import("@/lib/utils/profiles-cache");
@@ -328,12 +288,10 @@ export async function updateUserRole(userId: string, role: "user" | "admin") {
       .single();
 
     if (error) {
-      // Check if error is due to missing table
-      // For UPDATE operations, PGRST116 could mean table OR row missing
-      // Check error message to distinguish
-      const tableMissing = isTableMissingError(error, false);
+      // Use unified error analysis
+      const errorAnalysis = analyzeProfileError(error, false);
 
-      if (tableMissing) {
+      if (errorAnalysis.isTableMissing) {
         // Update cache
         try {
           const { setServerProfilesTableCache } = await import("@/lib/utils/profiles-cache");

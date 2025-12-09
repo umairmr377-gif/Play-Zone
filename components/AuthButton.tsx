@@ -11,6 +11,7 @@ import {
   setProfilesTableExists,
   setSessionTableMissing,
 } from "@/lib/utils/profiles-cache";
+import { analyzeProfileError } from "@/lib/utils/profile-error-handler";
 
 interface UserProfile {
   id: string;
@@ -65,6 +66,7 @@ export default function AuthButton() {
       } else {
         let profile = null;
 
+        // Check cache BEFORE making request to prevent 404 errors
         const skipQuery = shouldSkipProfilesQuery();
 
         if (!skipQuery) {
@@ -79,53 +81,28 @@ export default function AuthButton() {
               profile = data;
               setProfilesTableExists(true);
             } else if (error) {
-              const errorMessage = String(error.message || "").toLowerCase();
+              // Use unified error analysis
+              const errorAnalysis = analyzeProfileError(error, false);
 
-              // PGRST116 from SELECT = row missing, not table missing
-              // Only treat as table-missing if message mentions relation/table
-              const isTableMissing =
-                (error as any)?.status === 404 ||
-                error?.code === "42P01" ||
-                (error?.code === "PGRST116" && (
-                  errorMessage.includes("relation") ||
-                  errorMessage.includes("table") ||
-                  errorMessage.includes("schema cache")
-                )) ||
-                errorMessage.includes("does not exist") ||
-                errorMessage.includes("relation") ||
-                errorMessage.includes("table") ||
-                errorMessage.includes("schema cache") ||
-                errorMessage.includes("404");
-
-              if (isTableMissing) {
+              if (errorAnalysis.isTableMissing) {
+                // Set cache IMMEDIATELY to prevent future requests
                 setProfilesTableExists(false);
                 setSessionTableMissing(true);
+                // Profile remains null - user will have default role
               } else {
+                // Not a table-missing error - cache that table exists
+                setProfilesTableExists(true);
                 if (process.env.NODE_ENV === "development") {
                   console.warn("Profile fetch error (non-critical):", error.message);
                 }
-                setProfilesTableExists(true);
               }
             }
           } catch (error: any) {
-            const msg = String(error?.message || "").toLowerCase();
+            // Use unified error analysis
+            const errorAnalysis = analyzeProfileError(error, false);
 
-            // PGRST116 from SELECT = row missing, not table missing
-            // Only treat as table-missing if message mentions relation/table
-            const isTableMissing =
-              (error as any)?.status === 404 ||
-              error?.code === "42P01" ||
-              (error?.code === "PGRST116" && (
-                msg.includes("relation") ||
-                msg.includes("table") ||
-                msg.includes("schema cache")
-              )) ||
-              msg.includes("404") ||
-              msg.includes("does not exist") ||
-              msg.includes("relation") ||
-              msg.includes("table");
-
-            if (isTableMissing) {
+            if (errorAnalysis.isTableMissing) {
+              // Set cache IMMEDIATELY to prevent future requests
               setProfilesTableExists(false);
               setSessionTableMissing(true);
             } else if (process.env.NODE_ENV === "development") {
@@ -133,6 +110,7 @@ export default function AuthButton() {
             }
           }
         }
+        // If skipQuery is true, profile remains null (user gets default role)
 
         setUser({
           id: authUser.id,
