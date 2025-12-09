@@ -14,6 +14,21 @@ export async function GET() {
   try {
     const envCheck = checkSupabaseEnv();
 
+    // Build appropriate message based on status
+    let message: string;
+    if (envCheck.configured) {
+      message = "All required environment variables are configured";
+    } else if (envCheck.missing.length > 0) {
+      message = `Missing required variables: ${envCheck.missing.join(", ")}`;
+      if (envCheck.warnings.length > 0) {
+        message += `. Warnings: ${envCheck.warnings.join("; ")}`;
+      }
+    } else if (envCheck.warnings.length > 0) {
+      message = `Configuration warnings: ${envCheck.warnings.join("; ")}`;
+    } else {
+      message = "Unable to determine configuration status";
+    }
+
     return NextResponse.json({
       status: envCheck.configured ? "ok" : "error",
       configured: envCheck.configured,
@@ -24,9 +39,7 @@ export async function GET() {
         anonKey: envCheck.details.anonKey ? "configured" : null,
         serviceRoleKey: envCheck.details.serviceRoleKey ? "configured" : null,
       },
-      message: envCheck.configured
-        ? "All required environment variables are configured"
-        : `Missing: ${envCheck.missing.join(", ")}`,
+      message,
       timestamp: new Date().toISOString(),
     }, {
       status: envCheck.configured ? 200 : 503,

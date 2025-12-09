@@ -55,7 +55,9 @@ export function checkSupabaseEnv(): EnvCheckResult {
     warnings.push("NEXT_PUBLIC_SUPABASE_ANON_KEY doesn't appear to be a valid JWT token");
   }
 
-  const configured = missing.length === 0 && warnings.length === 0;
+  // Configured = all required variables are present (warnings don't affect this)
+  // Warnings indicate potential issues but don't mean the system is unconfigured
+  const configured = missing.length === 0;
 
   return {
     configured,

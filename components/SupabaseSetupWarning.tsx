@@ -4,20 +4,22 @@ import { createClient } from "@/lib/supabase/client";
 import Card from "./Card";
 import { AlertCircle, ExternalLink } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function SupabaseSetupWarning() {
   const supabase = createClient();
+  // Initialize to false to match server-side render (avoids hydration mismatch)
+  // Server always renders with false, client starts with false, then updates after hydration
   const [isVercel, setIsVercel] = useState(false);
   
   useEffect(() => {
-    // Check if deployed on Vercel
+    // Check if deployed on Vercel - only runs on client after hydration
+    // This update happens after initial render, so React handles it gracefully
     if (typeof window !== "undefined") {
       const hostname = window.location.hostname;
       setIsVercel(
         hostname.includes("vercel.app") ||
-        hostname.includes("vercel.com") ||
-        process.env.NEXT_PUBLIC_VERCEL === "1"
+        hostname.includes("vercel.com")
       );
     }
   }, []);
